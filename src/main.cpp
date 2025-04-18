@@ -1,8 +1,8 @@
 #include <Arduino.h>
-#include <SPI.h>
 
 #include <climits>
 
+#include "SPIWrapper.h"
 #include "config.h"
 #include "instrument.h"
 #include "led.h"
@@ -18,18 +18,15 @@ Player player(instr, leds);
 Panel panel(instr, player, leds);
 
 // uint32_t clockIn, uint8_t bitOrderIn, uint8_t dataModeIn
-SPISettings dacSPISettings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-SPISettings mcp4802Settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-SPISettings pga2311Settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-SPISettings keyboardSPISettings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-
-// SPISettings dacSPISettings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-// SPISettings mcp4802Settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-// SPISettings pga2311Settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
-// SPISettings keyboardSPISettings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
+SPIWrapperSettings ledSPISettings(100000, MSBFIRST, SPI_MODE0, PIN_P_MOSI, PIN_P_SCK);
+SPIWrapperSettings dacSPISettings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
+SPIWrapperSettings mcp4802Settings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
+SPIWrapperSettings pga2311Settings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
+SPIWrapperSettings keyboardSPISettings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
 
 void pin_setup() {
     // seperate bitbanged pseudo-SPI line for whacky panel
+
     pinMode(PIN_P_MOSI, OUTPUT);
     pinMode(PIN_P_SCK, OUTPUT);
     digitalWrite(PIN_P_MOSI, HIGH);
@@ -37,9 +34,6 @@ void pin_setup() {
 
     pinMode(PIN_SPI_MOSI, OUTPUT);
     pinMode(PIN_SPI_SCK, OUTPUT);
-    SPI.setMOSI(PIN_SPI_MOSI);
-    SPI.setSCK(PIN_SPI_SCK);
-    SPI.begin();
 
     pinMode(PIN_EN_SQR, OUTPUT);
     pinMode(PIN_EN_SAW, OUTPUT);
@@ -83,22 +77,41 @@ void pin_setup() {
 
 void init_test_all() {
     printf("\nTesting:\n");
-    delay(1000);
+    delay(500);
+
+    printf("\nTesting Panel Read\n");
+    panel.read();
+    delay(500);
+
+    printf("\nTesting Panel Update\n");
+    panel.update();
+
+    printf("\nTesting Player Update\n");
+    player.update(0.1);
+    delay(500);
+
+    printf("\nTesting Instrument Update\n");
+    instr.update(0.1);
+    delay(500);
+
+    printf("\nTesting Instrument Write\n");
+    instr.write();
+    delay(500);
 
     // // TEST PANEL READ AND LABELED
-    printf("\nPanel elements:\n");
+    printf("\nTesting Panel elements\n");
     panel.read();
     panel.test_print_panel_elements();
     delay(1000);
 
     // TEST LEDS
-    printf("\nLEDs:\n");
+    printf("\nTesting LEDs\n");
     for (int i = LED__COUNT__ - 1; i >= 0; i--) {
         serialPrintf("%d\n", i);
         leds.setAll(LED_MODE_OFF);
         leds.setSingle((PanelLeds)i, LED_MODE_ON);
         leds.write();
-        delay(300);
+        delay(50);
     }
     delay(1000);
 
@@ -108,7 +121,7 @@ void init_test_all() {
 void setup() {
     Serial.begin(115200);
 
-    // while (!Serial); // wait for serial to open
+    while (!Serial);  // wait for serial to open
 
     pin_setup();
     analogReadAveraging(4);  // values from 1-4 https://forum.pjrc.com/index.php?threads/analog-read-on-teensy-4-0-slower-compared-to-teensy-3-6.57683/

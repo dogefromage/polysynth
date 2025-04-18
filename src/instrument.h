@@ -1,7 +1,7 @@
 #pragma once
 #include "config.h"
-#include "patch.h"
 #include "led.h"
+#include "patch.h"
 
 #define VOICE_COUNT 8
 
@@ -36,14 +36,14 @@ class Envelope {
 
 class Lfo {
    public:
+    float drift = 0;
     float delay = 0, time = 0, x = 0, level = 0, frequency = 1;
-    bool lastGate = false;
-    void update(float dt, bool gate);
+    void update(float dt);
 };
 
 struct TuningCorrection {
     // float slope = 1, intersept = 0;
-    float parabolic[3] = { 0, 1, 0 };
+    float parabolic[3] = {0, 1, 0};
 };
 
 void reset_correction(TuningCorrection& corr);
@@ -61,11 +61,11 @@ struct Voice {
     // final values, uncorrected
     float out_pitch, out_cutoff, out_pulse,
         out_sub, out_resonance, out_amp;
-        
+
     TuningCorrection pitch_correction, cutoff_correction;
     float volume_correction = 1;
 
-    void update(float dt, Patch* patch);
+    void update(float dt, Patch* patch, float syncedLfoLevel);
 };
 
 class Instrument {
@@ -73,8 +73,10 @@ class Instrument {
     int mixer = MIXER_SAW;
     int chorusType = 0;
     int schedulingTagCounter = 0;
-    Lfo chorusLfoLeft, chorusLfoRight;
+    Lfo chorusLfoLeft, chorusLfoRight, syncedLfo;
     float mainVolume = 1;
+
+    int unisonDivider = 2;
 
     PanelLedController& leds;
 

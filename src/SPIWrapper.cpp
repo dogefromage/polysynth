@@ -1,21 +1,34 @@
 #include "SPIWrapper.h"
 
-SPIWrapperSettings::SPIWrapperSettings(uint32_t clk, uint8_t order, uint8_t mode)
-    : clock(clk), bitOrder(order), dataMode(mode) {}
+SPIWrapperSettings::SPIWrapperSettings(uint32_t clk, uint8_t order, uint8_t mode, uint8_t mosiPin, uint8_t sckPin)
+    : clock(clk), bitOrder(order), dataMode(mode), mosi_pin(mosiPin), sck_pin(sckPin) {}
 
-SPIWrapper::SPIWrapper(uint32_t bitbangThreshold, uint8_t mosiPin, uint8_t sckPin)
-    : bitbang_threshold(bitbangThreshold), mosi_pin(mosiPin), sck_pin(sckPin), use_bitbang(false), current_settings(4000000, MSBFIRST, SPI_MODE0) {}
+SPIWrapper::SPIWrapper(uint32_t bitbangThreshold)
+    : bitbang_threshold(bitbangThreshold), use_bitbang(false), current_settings(4000000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK) {
+}
 
 void SPIWrapper::beginTransaction(const SPIWrapperSettings& settings) {
     use_bitbang = settings.clock < bitbang_threshold;
     current_settings = settings;
 
+    // printf("beginning transaction(%ld, %d, %d, %d, %d) bb=%u\n", settings.clock, settings.bitOrder, settings.dataMode, settings.mosi_pin, settings.sck_pin, use_bitbang);
+
     if (use_bitbang) {
-        pinMode(mosi_pin, OUTPUT);
-        pinMode(sck_pin, OUTPUT);
-        digitalWrite(mosi_pin, LOW);
-        digitalWrite(sck_pin, (cpol() ? HIGH : LOW));
+        pinMode(settings.mosi_pin, OUTPUT);
+        pinMode(settings.sck_pin, OUTPUT);
+        digitalWrite(settings.mosi_pin, LOW);
+        digitalWrite(settings.sck_pin, (cpol() ? HIGH : LOW));
     } else {
+        SPI.begin();
+        SPI.setMOSI(PIN_SPI_MOSI);
+        SPI.setSCK(PIN_SPI_SCK);
+
+        if (settings.mosi_pin != PIN_SPI_MOSI) {
+            printf("ERROR mosi pin must match builtin one\n");
+        }
+        if (settings.sck_pin != PIN_SPI_SCK) {
+            printf("ERROR mosi pin must match builtin one\n");
+        }
         SPI.beginTransaction(SPISettings(settings.clock, settings.bitOrder, settings.dataMode));
     }
 }
@@ -51,7 +64,7 @@ void SPIWrapper::bitbangTransfer16(uint16_t data) {
         uint8_t bit_index = (current_settings.bitOrder == MSBFIRST) ? 15 - i : i;
         bool bit = (data >> bit_index) & 1;
 
-        digitalWrite(mosi_pin, bit);
+        digitalWrite(current_settings.mosi_pin, bit);
 
         if (!cpha()) {
             toggleClock();
@@ -62,15 +75,17 @@ void SPIWrapper::bitbangTransfer16(uint16_t data) {
     }
 
     // restore clock to idle
-    digitalWrite(sck_pin, cpol() ? HIGH : LOW);
+    digitalWrite(current_settings.sck_pin, cpol() ? HIGH : LOW);
 }
 
 void SPIWrapper::toggleClock() {
     bool idle = cpol();
     bool active = !idle;
 
-    digitalWrite(sck_pin, active);
+    digitalWrite(current_settings.sck_pin, active);
     delayBit();
-    digitalWrite(sck_pin, idle);
+    digitalWrite(current_settings.sck_pin, idle);
     delayBit();
 }
+
+SPIWrapper spiWrapper;

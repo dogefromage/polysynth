@@ -1,9 +1,10 @@
 #include "dacs.h"
 
 #include <Arduino.h>
-#include <SPI.h>
-#include "utils.h"
+
+#include "SPIWrapper.h"
 #include "instrument.h"
+#include "utils.h"
 
 #define DAC_CHANNEL_COUNT 8
 #define DAC_COUNT 8
@@ -65,10 +66,10 @@ void dacs_write(Instrument* inst) {
         uint16_t cutoff_b = semis_to_short(apply_correction(voice_b->out_cutoff, &voice_b->cutoff_correction));
 
         // serialPrintf("pulsea %u, pulseb %u, resb %u, vcab %u, resa %u, vcaa %u, subb %u, suba %u\n",
-        //     lower_dac[DAC_CH_A], lower_dac[DAC_CH_B], lower_dac[DAC_CH_C], lower_dac[DAC_CH_D], 
+        //     lower_dac[DAC_CH_A], lower_dac[DAC_CH_B], lower_dac[DAC_CH_C], lower_dac[DAC_CH_D],
         //     lower_dac[DAC_CH_E], lower_dac[DAC_CH_F], lower_dac[DAC_CH_G], lower_dac[DAC_CH_H]);
 
-        // serialPrintf("pitch_a %u, pitch_b %u, cutoff_a %u, cutoff_b %u\n", 
+        // serialPrintf("pitch_a %u, pitch_b %u, cutoff_a %u, cutoff_b %u\n",
         //     pitch_a, pitch_b, cutoff_a, cutoff_b);
 
         upper_dac[DAC_CH_A] = (cutoff_b >> 8) & 0xff;
@@ -81,7 +82,7 @@ void dacs_write(Instrument* inst) {
         upper_dac[DAC_CH_H] = pitch_a & 0xff;
     }
 
-    SPI.beginTransaction(dacSPISettings);
+    spiWrapper.beginTransaction(dacSPISettings);
 
     for (int channel = 0; channel < DAC_CHANNEL_COUNT; channel++) {
         digitalWrite(PIN_DAC_CS, LOW);
@@ -92,7 +93,7 @@ void dacs_write(Instrument* inst) {
             uint8_t ctrl_msg = channel + 1;
             // send msg
             uint16_t serial_msg = (ctrl_msg << 12) | (dac_level << 4);
-            SPI.transfer16(serial_msg);
+            spiWrapper.transfer16(serial_msg);
 
             delayMicroseconds(DAC_CS_DELAY_MICROS);
         }
@@ -101,5 +102,5 @@ void dacs_write(Instrument* inst) {
         delayMicroseconds(DAC_CS_DELAY_MICROS);
     }
 
-    SPI.endTransaction();
+    spiWrapper.endTransaction();
 }

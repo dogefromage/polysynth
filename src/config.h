@@ -1,8 +1,7 @@
 #pragma once
 
-#include <SPI.h>
-
 // teensy pins
+#include "SPIWrapper.h"
 
 // #define PIN_SPI_MOSI 11 // already in teensy headers
 // #define PIN_SPI_SCK 13
@@ -43,12 +42,12 @@
 
 #define VERBOSE_TUNING
 
-#define ACTIVE_VOICES 6
+#define ACTIVE_VOICES 8
 
 #define NUM_KEYS 61
 
-extern SPISettings dacSPISettings;
-extern SPISettings mcp4802Settings;
-extern SPISettings pga2311Settings;
-// extern SPISettings ledSPISettings;
-extern SPISettings keyboardSPISettings;
+extern SPIWrapperSettings ledSPISettings;
+extern SPIWrapperSettings dacSPISettings;
+extern SPIWrapperSettings mcp4802Settings;
+extern SPIWrapperSettings pga2311Settings;
+extern SPIWrapperSettings keyboardSPISettings;

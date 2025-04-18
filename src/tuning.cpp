@@ -3,9 +3,9 @@
 #include "config.h"
 #include "dacs.h"
 #include "instrument.h"
-#include "utils.h"
 #include "linalg.h"
 #include "memory.h"
+#include "utils.h"
 
 static float idealFrequencyToSemis(float freq) {
     float C0 = 16.35160;
@@ -57,8 +57,8 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
         if (millis() > maxWaitTime) {
             detachInterrupt(digitalPinToInterrupt(PIN_AUDIO_LOOPBACK));
 #ifdef VERBOSE_TUNING
-            serialPrintf("[%d] (%s) Tuning timeout, semis=%.2f\n", 
-                voiceIndex, isFilter ? "cutoff" : "pitch", semis);
+            serialPrintf("[%d] (%s) Tuning timeout, semis=%.2f\n",
+                         voiceIndex, isFilter ? "cutoff" : "pitch", semis);
 #endif
             return -1;
         }
@@ -92,15 +92,15 @@ int Instrument::findTuningProfile(int voiceIndex, float semis_min, float semis_m
         float test_semis = semis_min + i * step;
         float test_freq = measureFrequency(voiceIndex, test_semis, isFilter);
         if (test_freq < 0.0) {
-            return 1; // tuning timeout (maybe make it such that some can fail TODO)
+            return 1;  // tuning timeout (maybe make it such that some can fail TODO)
         }
         float ideal_semis = idealFrequencyToSemis(test_freq);
 
         x[i] = ideal_semis;
         y[i] = test_semis;
 
-        printf("[%d] (%s) %-10.3f%-10.3f%-10.3f\n", 
-            voiceIndex, isFilter ? "cutoff" : "pitch", test_semis, test_freq, ideal_semis);
+        printf("[%d] (%s) %-10.3f%-10.3f%-10.3f\n",
+               voiceIndex, isFilter ? "cutoff" : "pitch", test_semis, test_freq, ideal_semis);
     }
 
     // solve LSQ
@@ -108,7 +108,7 @@ int Instrument::findTuningProfile(int voiceIndex, float semis_min, float semis_m
 
 #ifdef VERBOSE_TUNING
     printf("%-6d%-7s a+bx+cx^2: %-10.3f%-10.3f%-10.3f\n",
-        voiceIndex, isFilter ? "cutoff" : "pitch", corr->parabolic[0], corr->parabolic[1], corr->parabolic[2]);
+           voiceIndex, isFilter ? "cutoff" : "pitch", corr->parabolic[0], corr->parabolic[1], corr->parabolic[2]);
 #endif
 
     return 0;
@@ -139,14 +139,13 @@ void Instrument::load_tuning() {
 }
 
 void Instrument::tune() {
-
     TuningCorrection newCorrections[2 * ACTIVE_VOICES];
 
     mainVolume = 0;
 
-    #ifdef VERBOSE_TUNING
-        printf("Tuning:\n");
-    #endif
+#ifdef VERBOSE_TUNING
+    printf("Tuning:\n");
+#endif
 
     leds.setAllNumbers(LedModes::LED_MODE_OFF);
     leds.write();
@@ -172,7 +171,7 @@ void Instrument::tune() {
         int errored = findTuningProfile(i, 30, 110, false);  // dac write is called later on
 
         leds.setSingle(
-            (PanelLeds)(PanelLeds::LED_PATCH_01 + 2 * i), 
+            (PanelLeds)(PanelLeds::LED_PATCH_01 + 2 * i),
             errored ? LedModes::LED_MODE_OFF : LedModes::LED_MODE_ON);
         leds.write();
 
@@ -183,7 +182,7 @@ void Instrument::tune() {
         errored = findTuningProfile(i, 30, 60, true);  // dac write is called later on
 
         leds.setSingle(
-            (PanelLeds)(PanelLeds::LED_PATCH_01 + 2 * i + 1), 
+            (PanelLeds)(PanelLeds::LED_PATCH_01 + 2 * i + 1),
             errored ? LedModes::LED_MODE_OFF : LedModes::LED_MODE_ON);
         leds.write();
 
@@ -198,7 +197,7 @@ void Instrument::tune() {
 void Instrument::testTuning() {
     mainVolume = 0;
     totalTuningCycles = 100;
-    
+
     for (int j = 5; j < 150; j += 5) {
         printf("%-10d", j);
     }
@@ -219,7 +218,7 @@ void Instrument::testTuning() {
         voice.out_resonance = 0;
         voice.out_sub = 0;
         voice.out_amp = 1;
-        
+
         mixer = 0;
         voice.out_resonance = 0.6;
         voice.out_amp = 1;
@@ -234,16 +233,15 @@ void Instrument::testTuning() {
         }
         printf("\n");
     }
-    
+
     while (1);
 }
-
 
 // void Instrument::testTuning() {
 //     mainVolume = 0;
 
 //     int testVoice = 0;
-    
+
 //     printf("%-10s", "cycles");
 //     for (int j = 5; j < 150; j += 5) {
 //         printf("%-10d", j);
@@ -251,7 +249,7 @@ void Instrument::testTuning() {
 //     printf("\n");
 
 //     for (totalTuningCycles = 10 ; totalTuningCycles <= 1000; totalTuningCycles *= 2) {
-        
+
 //         printf("%-10d", totalTuningCycles);
 
 //         // mute all voices
@@ -267,7 +265,7 @@ void Instrument::testTuning() {
 //         voice.out_resonance = 0;
 //         voice.out_sub = 0;
 //         voice.out_amp = 1;
-        
+
 //         // mixer = 0;
 //         // voice.out_resonance = 0.6;
 //         // voice.out_amp = 1;
@@ -284,6 +282,6 @@ void Instrument::testTuning() {
 //         }
 //         printf("\n");
 //     }
-    
+
 //     while (1);
 // }

@@ -1,7 +1,7 @@
 #include "led.h"
 
+#include "SPIWrapper.h"
 #include "config.h"
-#include "utils.h"
 
 void PanelLedController::update(float dt) {
     timeSinceSwitch += dt;
@@ -12,16 +12,11 @@ void PanelLedController::update(float dt) {
 }
 
 void PanelLedController::write() {
-    // SPI.beginTransaction(ledSPISettings);
-    // SPI.end();
-
-    // manual setup
-    digitalWrite(PIN_P_MOSI, HIGH);
-    digitalWrite(PIN_P_SCK, LOW);
+    spiWrapper.beginTransaction(ledSPISettings);
 
     digitalWrite(PIN_P_SR_RCLK, LOW);
     delayMicroseconds(5);  // idk
-    
+
     int ledMapping[] = {
         0,  // 0
         LED_BEND_OCT,
@@ -69,29 +64,13 @@ void PanelLedController::write() {
         }
     }
 
-    uint64_t led_clock = 100000;
-    // uint64_t led_clock = 50000;
-    sendSPIBitBangedMode0MSBFirst(buf >> 24, PIN_P_MOSI, PIN_P_SCK, led_clock);
-    delayMicroseconds(5);
-    sendSPIBitBangedMode0MSBFirst(buf >> 16, PIN_P_MOSI, PIN_P_SCK, led_clock);
-    delayMicroseconds(5);
-    sendSPIBitBangedMode0MSBFirst(buf >>  8, PIN_P_MOSI, PIN_P_SCK, led_clock);
-    delayMicroseconds(5);
-    sendSPIBitBangedMode0MSBFirst(buf      , PIN_P_MOSI, PIN_P_SCK, led_clock);
-    delayMicroseconds(5);
-
-    // SPI.transfer32(buf);
-    
-    digitalWrite(PIN_P_MOSI, HIGH);
-    digitalWrite(PIN_P_SCK, LOW);
+    spiWrapper.transfer16(buf >> 16);
+    spiWrapper.transfer16(buf);
 
     delayMicroseconds(5);
-
     digitalWrite(PIN_P_SR_RCLK, HIGH);
 
-    // SPI.begin();
-
-    // SPI.endTransaction();
+    spiWrapper.endTransaction();
 }
 
 void PanelLedController::setAll(LedModes mode) {

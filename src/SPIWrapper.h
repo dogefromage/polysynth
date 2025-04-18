@@ -8,13 +8,15 @@ class SPIWrapperSettings {
     uint32_t clock;
     uint8_t bitOrder;
     uint8_t dataMode;
+    uint8_t mosi_pin;
+    uint8_t sck_pin;
 
-    SPIWrapperSettings(uint32_t clk, uint8_t order, uint8_t mode);
+    SPIWrapperSettings(uint32_t clk, uint8_t order, uint8_t mode, uint8_t mosiPin, uint8_t sckPin);
 };
 
 class SPIWrapper {
    public:
-    SPIWrapper(uint32_t bitbangThreshold = 1000000, uint8_t mosiPin = 11, uint8_t sckPin = 13);
+    SPIWrapper(uint32_t bitbangThreshold = 1000000);
 
     void beginTransaction(const SPIWrapperSettings& settings);
     void endTransaction();
@@ -22,8 +24,6 @@ class SPIWrapper {
 
    private:
     uint32_t bitbang_threshold;
-    uint8_t mosi_pin;
-    uint8_t sck_pin;
     bool use_bitbang;
     SPIWrapperSettings current_settings;
 

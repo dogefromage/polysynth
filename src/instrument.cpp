@@ -1,8 +1,8 @@
 #include "instrument.h"
 
 #include <Arduino.h>
-#include <SPI.h>
 
+#include "SPIWrapper.h"
 #include "config.h"
 #include "core_pins.h"
 #include "dacs.h"
@@ -54,22 +54,18 @@ void Envelope::update(float dt, bool gate) {
     }
 }
 
-void Lfo::update(float dt, bool gate) {
-    if (lastGate != gate) {
-        lastGate = gate;
-        // time = 0;
-    }
-
-    x += 2 * M_PI * frequency * dt;
+void Lfo::update(float dt) {
+    x += 2 * M_PI * (frequency + drift) * dt;
 
     level = sineApprox(x);
     if (time < delay) {
+        // TODO smooth attack when delay surpassed
         level = 0;
     }
     time += dt;
 }
 
-void Voice::update(float dt, Patch* patch) {
+void Voice::update(float dt, Patch* patch, float syncedLfoLevel) {
     env.attack = 10 * faderLog(patch->faders[FD_ATTACK]);
     env.decay = 10 * faderLog(patch->faders[FD_DECAY]);
     env.sustain = faderLin(patch->faders[FD_SUSTAIN]);
@@ -77,9 +73,11 @@ void Voice::update(float dt, Patch* patch) {
 
     lfo.frequency = 10 * faderLog(patch->faders[FD_LFO_RATE]);
     lfo.delay = 10 * faderLog(patch->faders[FD_LFO_DELAY]);
+    lfo.update(dt);
+
+    float lfoLevel = patch->switches[SW_LFO_SYNC] ? syncedLfoLevel : lfo.level;
 
     env.update(dt, gate);
-    lfo.update(dt, gate);
 
     float vcoLfo = 30 * faderLog(patch->faders[FD_VIBRATO]);
     float vcfFreq = lerp(faderLin(patch->faders[FD_CUTOFF]), -20, 60);
@@ -88,11 +86,11 @@ void Voice::update(float dt, Patch* patch) {
     float vcfEnv = 50 * faderLin(patch->faders[FD_FILTER_ENVELOPE]);
 
     float pwm = faderLin(patch->faders[FD_PULSE_WIDTH]);
-    out_pitch = note + vcoLfo * lfo.level;
-    out_cutoff = vcfFreq + vcfKybd * note + vcfLfo * lfo.level + vcfEnv * env.level;
+    out_pitch = note + vcoLfo * lfoLevel;
+    out_cutoff = vcfFreq + vcfKybd * note + vcfLfo * lfoLevel + vcfEnv * env.level;
     out_pulse = chooseValue(
         0.5 + 0.5 * env.level * pwm,
-        0.5 + 0.5 * lfo.level * pwm,
+        0.5 + 0.5 * lfoLevel * pwm,
         pwm,
         patch->switches[SW_VCO_PWM_SOURCE]);
     out_sub = faderLin(patch->faders[FD_SUB_OSCILLATOR]);
@@ -110,12 +108,38 @@ Instrument::Instrument(PanelLedController& leds) : leds(leds) {
     patch.switches[PatchSwitches::SW_VCO_SAW] = 1;
 
     settings[INS_VOLUME] = 900;
+
+    float random_phase_offsets[] = {
+        0.1374f,
+        0.8649f,
+        0.5221f,
+        0.0376f,
+        0.9185f,
+        0.2713f,
+        0.6830f,
+        0.4507f};
+
+    for (int i = 0; i < ACTIVE_VOICES; i++) {
+        // voices[i].lfo.time = 11.392183 * random_phase_offsets[i];
+        voices[i].lfo.drift = 0.05 * random_phase_offsets[i];
+    }
 }
 
 void Instrument::update(float dt) {
+    // must match implementation in voice
+    syncedLfo.frequency = 10 * faderLog(patch.faders[FD_LFO_RATE]);
+    syncedLfo.delay = 10 * faderLog(patch.faders[FD_LFO_DELAY]);
+    syncedLfo.update(dt);
+
+    int numVirtualVoices = ACTIVE_VOICES / unisonDivider;
+    for (int i = numVirtualVoices; i < ACTIVE_VOICES; i++) {
+        voices[i].note = voices[i % numVirtualVoices].note;
+        voices[i].gate = voices[i % numVirtualVoices].gate;
+    }
+
     for (int i = 0; i < ACTIVE_VOICES; i++) {
         // serialPrintf("%u, %u, %u\n", i, voices[i].note, voices[i].gate);
-        voices[i].update(dt, &patch);
+        voices[i].update(dt, &patch, syncedLfo.level);
     }
 
     int square = patch.switches[SW_VCO_SQUARE] & 1;
@@ -142,8 +166,8 @@ void Instrument::update(float dt) {
             chorusLfoRight.x = chorusLfoLeft.x + 0.5 * M_PI;
             break;
     }
-    chorusLfoLeft.update(dt, HIGH);
-    chorusLfoRight.update(dt, HIGH);
+    chorusLfoLeft.update(dt);
+    chorusLfoRight.update(dt);
 
     mainVolume = settings[INS_VOLUME] / 1024.0f;
     // serialPrintf("%.2f\n", mainVolume);
@@ -151,12 +175,14 @@ void Instrument::update(float dt) {
 }
 
 void Instrument::scheduleNoteOn(int note, int velocity) {
+    int numVirtualVoices = ACTIVE_VOICES / unisonDivider;
+
     if (velocity == 0) {
         scheduleNoteOff(note);
         return;
     }
 
-    for (int i = 0; i < ACTIVE_VOICES; i++) {
+    for (int i = 0; i < numVirtualVoices; i++) {
         if (voices[i].gate && voices[i].note == note) {
             return;  // some voice is already playing that note :(
         }
@@ -172,7 +198,7 @@ void Instrument::scheduleNoteOn(int note, int velocity) {
     // } else
 
     // find oldest voice or steal active one
-    for (int i = 0; i < ACTIVE_VOICES; i++) {
+    for (int i = 0; i < numVirtualVoices; i++) {
         int currentTag = voices[i].schedulingTag;
         int currentGate = voices[i].gate;
         // higher priority for scheduling voice if gate off but respect tag on both ends
@@ -183,9 +209,6 @@ void Instrument::scheduleNoteOn(int note, int velocity) {
             oldestGate = currentGate;
         }
     }
-
-    // // test only 1 voice:
-    oldest = 0;
 
     // schedule oldest voice and steal if necessary
     Voice& next = voices[oldest];
@@ -205,7 +228,8 @@ void Instrument::scheduleNoteOn(int note, int velocity) {
 }
 
 void Instrument::scheduleNoteOff(int note) {
-    for (int i = 0; i < ACTIVE_VOICES; i++) {
+    int numVirtualVoices = ACTIVE_VOICES / unisonDivider;
+    for (int i = 0; i < numVirtualVoices; i++) {
         if (voices[i].gate && voices[i].note == note) {
             voices[i].gate = false;
             voices[i].schedulingTag = schedulingTagCounter++;
@@ -303,23 +327,23 @@ void Instrument::testChorus() {
     while (1) {
         printf("%f\n", lfo.level);
 
-        lfo.update(0.1f, true);
+        lfo.update(0.1);
         delay(100);
 
         float normalized = 0.25 + 0.75 * (0.5 + 0.5 * lfo.level);
         int level = (int)(255 * normalized);
 
-        SPI.beginTransaction(mcp4802Settings);
+        spiWrapper.beginTransaction(mcp4802Settings);
         digitalWrite(PIN_CHORUS_DAC_CS, LOW);
         delayMicroseconds(1);
-        SPI.transfer16((1 << 12) | (level << 4));  // 12bit means dac active
+        spiWrapper.transfer16((1 << 12) | (level << 4));  // 12bit means dac active
         digitalWrite(PIN_CHORUS_DAC_CS, HIGH);
         delayMicroseconds(1);
         digitalWrite(PIN_CHORUS_DAC_CS, LOW);
         delayMicroseconds(1);
-        SPI.transfer16((1 << 15) | (1 << 12) | (level << 4));  // 15 bit means channel B
+        spiWrapper.transfer16((1 << 15) | (1 << 12) | (level << 4));  // 15 bit means channel B
         digitalWrite(PIN_CHORUS_DAC_CS, HIGH);
-        SPI.endTransaction();
+        spiWrapper.endTransaction();
     }
 }
 
@@ -355,12 +379,11 @@ void Instrument::write() {
     int levelA = chorus_level(chorusLfoLeft.level);
     int levelB = chorus_level(chorusLfoRight.level);
 
-    spiBeginTransaction(mcp4802Settings);
-    SPI.beginTransaction(mcp4802Settings);
+    spiWrapper.beginTransaction(mcp4802Settings);
     digitalWrite(PIN_CHORUS_DAC_CS, LOW);
     delayMicroseconds(1);
 
-    SPI.transfer16((1 << 12) | (levelA << 4));  // 12bit means dac active
+    spiWrapper.transfer16((1 << 12) | (levelA << 4));  // 12bit means dac active
 
     digitalWrite(PIN_CHORUS_DAC_CS, HIGH);
     delayMicroseconds(1);
@@ -368,20 +391,20 @@ void Instrument::write() {
     digitalWrite(PIN_CHORUS_DAC_CS, LOW);
     delayMicroseconds(1);
 
-    SPI.transfer16((1 << 15) | (1 << 12) | (levelB << 4));  // 15 bit means channel B
+    spiWrapper.transfer16((1 << 15) | (1 << 12) | (levelB << 4));  // 15 bit means channel B
 
     digitalWrite(PIN_CHORUS_DAC_CS, HIGH);
-    SPI.endTransaction();
+    spiWrapper.endTransaction();
 
     // PGA2311
-    SPI.beginTransaction(pga2311Settings);
+    spiWrapper.beginTransaction(pga2311Settings);
     digitalWrite(PIN_AMP_CS, LOW);
     delayMicroseconds(3);
 
     char mainGain = toClampedChar(255 * mainVolume);
-    SPI.transfer16((mainGain << 8) | mainGain);
+    spiWrapper.transfer16((mainGain << 8) | mainGain);
 
     digitalWrite(PIN_AMP_CS, HIGH);
     delayMicroseconds(3);
-    SPI.endTransaction();
+    spiWrapper.endTransaction();
 }
