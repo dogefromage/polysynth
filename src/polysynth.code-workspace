@@ -1,0 +1,59 @@
+{
+	"folders": [
+        {
+            "name": "polysynth",
+            "path": ".."
+        },
+        {
+            "name": "minimoog",
+            "path": "../../../../../git/minimoog"
+        }
+    ],
+    "settings": {
+        "files.associations": {
+            "iosfwd": "cpp",
+            "limits": "cpp",
+            "streambuf": "cpp",
+            "*.tcc": "cpp",
+            "memory_resource": "cpp",
+            "ostream": "cpp",
+            "exception": "cpp",
+            "new": "cpp",
+            "system_error": "cpp",
+            "array": "cpp",
+            "functional": "cpp",
+            "tuple": "cpp",
+            "type_traits": "cpp",
+            "utility": "cpp",
+            "atomic": "cpp",
+            "bit": "cpp",
+            "cctype": "cpp",
+            "clocale": "cpp",
+            "cmath": "cpp",
+            "compare": "cpp",
+            "concepts": "cpp",
+            "cstdarg": "cpp",
+            "cstddef": "cpp",
+            "cstdint": "cpp",
+            "cstdio": "cpp",
+            "cstdlib": "cpp",
+            "cwchar": "cpp",
+            "cwctype": "cpp",
+            "deque": "cpp",
+            "string": "cpp",
+            "unordered_map": "cpp",
+            "vector": "cpp",
+            "algorithm": "cpp",
+            "iterator": "cpp",
+            "memory": "cpp",
+            "numeric": "cpp",
+            "random": "cpp",
+            "string_view": "cpp",
+            "initializer_list": "cpp",
+            "numbers": "cpp",
+            "stdexcept": "cpp",
+            "cinttypes": "cpp",
+            "typeinfo": "cpp"
+        }
+    },
+}
