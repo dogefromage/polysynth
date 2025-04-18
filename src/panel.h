@@ -2,9 +2,9 @@
 #include <stdint.h>
 
 #include "instrument.h"
+#include "led.h"
 #include "patch.h"
 #include "player.h"
-#include "led.h"
 
 // amount a fader must move such
 // that it goes into panel mode
@@ -69,6 +69,8 @@ class Panel {
 
     PanelElement faders[PANEL_FD__COUNT__];
     PanelElement switches[PANEL_SW__COUNT__];
+    bool hasChangedDivisor = false;
+    int sequencerRecordingLength = 0;
 
     void updateStatefulFader(int faderIndex, int16_t* target);
     void updateStatefulSwitch(int switchIndex, int8_t* target);
@@ -77,7 +79,7 @@ class Panel {
     bool isHeld(int switchIndex);
     int getClickedNumber();
     void setPanelInputsActivity(bool active);
-    
+
    public:
     Panel(Instrument&, Player&, PanelLedController&);
 

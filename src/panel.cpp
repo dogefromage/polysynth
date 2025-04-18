@@ -18,14 +18,6 @@ Panel::Panel(Instrument& instr, Player& player, PanelLedController& leds)
     setPanelInputsActivity(true);
 }
 
-// returns a number from 0 to positions-1 indicating
-// in which voltage division the analog pin voltage falls
-static int read_switch(int pin, int positions) {
-    int step = 1023 / (positions - 1);
-    int val = analogRead(pin);
-    return (val + step / 2) / step;
-}
-
 // adjust delay to as low as possible
 #define PANEL_MUX_IDLE_MICROS 100
 
@@ -98,7 +90,7 @@ void Panel::read() {
 
     switches[SW_SEQ_RECORD].current = !digitalRead(PIN_P_MUX_2);
     switches[SW_VCO_SQUARE].current = !digitalRead(PIN_P_MUX_4);
-    switches[SW_AMP_SHAPE].current = read_switch(PIN_P_MUX_5, 2);
+    switches[SW_AMP_SHAPE].current = discretizeSwitch(PIN_P_MUX_5, 2);
     switches[SW_PROG_NUM_07].current = !digitalRead(PIN_P_MUX_6);
 
     digitalWrite(PIN_P_MUX_3, HIGH);
@@ -153,7 +145,7 @@ void Panel::read() {
     digitalWrite(PIN_P_MUX_3, LOW);
     delayMicroseconds(PANEL_MUX_IDLE_MICROS);
 
-    switches[SW_ARP_MODE].current = read_switch(PIN_P_MUX_1, 3);
+    switches[SW_ARP_MODE].current = discretizeSwitch(PIN_P_MUX_1, 3);
     faders[FD_VIBRATO].current = analogRead(PIN_P_MUX_2);
     faders[FD_FILTER_ENVELOPE].current = analogRead(PIN_P_MUX_4);
     faders[FD_RELEASE].current = analogRead(PIN_P_MUX_5);
@@ -173,8 +165,8 @@ void Panel::read() {
     delayMicroseconds(PANEL_MUX_IDLE_MICROS);
 
     switches[SW_KEY_TRANSPOSE].current = !digitalRead(PIN_P_MUX_1);
-    switches[SW_ARP_RANGE].current = read_switch(PIN_P_MUX_2, 3);
-    switches[SW_VCO_PWM_SOURCE].current = read_switch(PIN_P_MUX_4, 3);
+    switches[SW_ARP_RANGE].current = discretizeSwitch(PIN_P_MUX_2, 3);
+    switches[SW_VCO_PWM_SOURCE].current = discretizeSwitch(PIN_P_MUX_4, 3);
     faders[FD_FILTER_KEYTRACK].current = analogRead(PIN_P_MUX_5);
     switches[SW_PROG_NUM_05].current = !digitalRead(PIN_P_MUX_6);
 
@@ -434,6 +426,9 @@ void Panel::update() {
     leds.setSingle(LED_TRANSPOSE, playerSettings[PLS_TRANSPOSING] ? LED_MODE_ON : LED_MODE_OFF);
 
     USE_TOGGLE(SW_MIDI_SYNC, playerSettings[PLS_MIDICLOCK]);
+    if (isClicked(SW_MIDI_SYNC)) {
+        player.resetClockProgress();
+    }
     leds.setSingle(LED_MIDI_CLOCK, playerSettings[PLS_MIDICLOCK] ? LED_MODE_ON : LED_MODE_OFF);
 
     playerSettings[PLS_RATE] = faders[FD_CTRL_RATE].current;
@@ -481,28 +476,56 @@ void Panel::update() {
                 break;
             default:
                 player.setStateArp();
+                player.setSongMode(SongMode::Playing);
                 break;
         }
     }
 
+    if (isClickedEarly(SW_SEQ_RECORD)) {
+        sequencerRecordingLength = 0;
+
+        bool seqPlaying = player.getState() == PlayerState::PLSTATE_SEQ_PLAYING;
+        bool seqRecording = player.getState() == PlayerState::PLSTATE_SEQ_RECORDING;
+        if (seqPlaying || seqRecording) {
+            // turning seq off
+            player.setStateNormal();
+        }
+    }
     if (isHeld(SW_SEQ_RECORD)) {
         int number = getClickedNumber();
         if (number >= 0) {
-            player.setStateSeqRecording(1 + number);
+            sequencerRecordingLength += 1 + number;
         }
     }
-    if (isClickedEarly(SW_SEQ_RECORD) &&
-        ((player.getState() == PlayerState::PLSTATE_SEQ_PLAYING) ||
-         (player.getState() == PlayerState::PLSTATE_SEQ_RECORDING))) {
-        player.setStateNormal();
+    if (isClicked(SW_SEQ_RECORD) && sequencerRecordingLength > 0) {
+        player.setStateSeqRecording(sequencerRecordingLength);
+        player.setSongMode(SongMode::Playing);
     }
+
     if (isClicked(SW_SEQ_BLANK)) {
         player.pushBlankNote();
     }
 
     // PROGRAM SECTION
 
-    if (isClicked(SW_PROG_RETUNE)) {
+    if (isClickedEarly(SW_PROG_RETUNE)) {
+        hasChangedDivisor = false;
+    }
+    if (isHeld(SW_PROG_RETUNE)) {
+        int currentDivisor = instr.getUnisonDivisor();
+
+        leds.setAllNumbers(LedModes::LED_MODE_OFF);
+        int led = PanelLeds::LED_PATCH_01 + currentDivisor - 1;
+        leds.setSingle((PanelLeds)led, LedModes::LED_MODE_ON);
+        leds.write();
+
+        int number = getClickedNumber();
+        if (number >= 0) {
+            hasChangedDivisor = true;
+            instr.setUnisonDivisor(number + 1);
+        }
+    }
+    if (isClicked(SW_PROG_RETUNE) && !hasChangedDivisor) {
         instr.tune();
     }
 

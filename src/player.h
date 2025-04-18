@@ -36,6 +36,11 @@ enum KeyState {
     KEY_STATE_PRESSED,
 };
 
+enum class SongMode {
+    Playing,
+    Paused
+};
+
 class Player {
     static Player* instance;
 
@@ -56,8 +61,10 @@ class Player {
     bool noteUpStep = false;
     bool arpDownwards = false;
     int arpLayer = 0;
-    float timeSinceTick = 0;
+    // float timeSinceTick = 0;
     int ticksSinceStep = 0;
+
+    SongMode songMode = SongMode::Playing;
 
     std::unordered_map<int, ActiveKey> activeKeys;
 
@@ -93,6 +100,13 @@ class Player {
     void toggleMidiChannel(int channel);
     void testKeyBed();
     int getMidiChannel();
+    void resetClockProgress();
+    void setSongMode(SongMode mode);
+
+    void usbMidiStart();
+    void usbMidiStop();
+    void usbMidiContinue();
+    void usbMidiHandleControlChange(uint8_t channel, uint8_t control, uint8_t value);
 
     Player(const Player&) = delete;
 
@@ -100,4 +114,6 @@ class Player {
     friend void usbMidiNoteOff(uint8_t channel, uint8_t note, uint8_t velocity);
     friend void usbMidiHandleControlChange(uint8_t channel, uint8_t control, uint8_t value);
     friend void usbMidiClock();
+    friend void usbMidiStart();
+    friend void onTimerTick();
 };

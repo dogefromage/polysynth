@@ -12,11 +12,6 @@ void PanelLedController::update(float dt) {
 }
 
 void PanelLedController::write() {
-    spiWrapper.beginTransaction(ledSPISettings);
-
-    digitalWrite(PIN_P_SR_RCLK, LOW);
-    delayMicroseconds(5);  // idk
-
     int ledMapping[] = {
         0,  // 0
         LED_BEND_OCT,
@@ -64,13 +59,16 @@ void PanelLedController::write() {
         }
     }
 
+    enterCritical();
+    spiWrapper.beginTransaction(ledSPISettings);
+    digitalWrite(PIN_P_SR_RCLK, LOW);
+    delayMicroseconds(5);  // idk
     spiWrapper.transfer16(buf >> 16);
     spiWrapper.transfer16(buf);
-
     delayMicroseconds(5);
     digitalWrite(PIN_P_SR_RCLK, HIGH);
-
     spiWrapper.endTransaction();
+    exitCritical();
 }
 
 void PanelLedController::setAll(LedModes mode) {

@@ -83,7 +83,7 @@ void Voice::update(float dt, Patch* patch, float syncedLfoLevel) {
     float vcfFreq = lerp(faderLin(patch->faders[FD_CUTOFF]), -20, 60);
     float vcfKybd = faderLinSnap(patch->faders[FD_FILTER_KEYTRACK], 0.05);
     float vcfLfo = 30 * faderLog(patch->faders[FD_FILTER_LFO]);
-    float vcfEnv = 50 * faderLin(patch->faders[FD_FILTER_ENVELOPE]);
+    float vcfEnv = 80 * faderLin(patch->faders[FD_FILTER_ENVELOPE]);
 
     float pwm = faderLin(patch->faders[FD_PULSE_WIDTH]);
     out_pitch = note + vcoLfo * lfoLevel;
@@ -131,7 +131,7 @@ void Instrument::update(float dt) {
     syncedLfo.delay = 10 * faderLog(patch.faders[FD_LFO_DELAY]);
     syncedLfo.update(dt);
 
-    int numVirtualVoices = ACTIVE_VOICES / unisonDivider;
+    int numVirtualVoices = ACTIVE_VOICES / unisonDivisor;
     for (int i = numVirtualVoices; i < ACTIVE_VOICES; i++) {
         voices[i].note = voices[i % numVirtualVoices].note;
         voices[i].gate = voices[i % numVirtualVoices].gate;
@@ -175,7 +175,7 @@ void Instrument::update(float dt) {
 }
 
 void Instrument::scheduleNoteOn(int note, int velocity) {
-    int numVirtualVoices = ACTIVE_VOICES / unisonDivider;
+    int numVirtualVoices = ACTIVE_VOICES / unisonDivisor;
 
     if (velocity == 0) {
         scheduleNoteOff(note);
@@ -228,7 +228,7 @@ void Instrument::scheduleNoteOn(int note, int velocity) {
 }
 
 void Instrument::scheduleNoteOff(int note) {
-    int numVirtualVoices = ACTIVE_VOICES / unisonDivider;
+    int numVirtualVoices = ACTIVE_VOICES / unisonDivisor;
     for (int i = 0; i < numVirtualVoices; i++) {
         if (voices[i].gate && voices[i].note == note) {
             voices[i].gate = false;
@@ -333,6 +333,7 @@ void Instrument::testChorus() {
         float normalized = 0.25 + 0.75 * (0.5 + 0.5 * lfo.level);
         int level = (int)(255 * normalized);
 
+        enterCritical();
         spiWrapper.beginTransaction(mcp4802Settings);
         digitalWrite(PIN_CHORUS_DAC_CS, LOW);
         delayMicroseconds(1);
@@ -344,7 +345,23 @@ void Instrument::testChorus() {
         spiWrapper.transfer16((1 << 15) | (1 << 12) | (level << 4));  // 15 bit means channel B
         digitalWrite(PIN_CHORUS_DAC_CS, HIGH);
         spiWrapper.endTransaction();
+        exitCritical();
     }
+}
+
+int Instrument::getUnisonDivisor() {
+    return unisonDivisor;
+}
+
+void Instrument::setUnisonDivisor(int newDivisor) {
+    if (newDivisor < 1) {
+        newDivisor = 1;
+    }
+    int virtualVoices = ACTIVE_VOICES / newDivisor;
+    if (virtualVoices < 1) {
+        virtualVoices = 1;
+    }
+    unisonDivisor = ACTIVE_VOICES / virtualVoices;
 }
 
 int toClampedChar(float x) {
@@ -379,6 +396,7 @@ void Instrument::write() {
     int levelA = chorus_level(chorusLfoLeft.level);
     int levelB = chorus_level(chorusLfoRight.level);
 
+    enterCritical();
     spiWrapper.beginTransaction(mcp4802Settings);
     digitalWrite(PIN_CHORUS_DAC_CS, LOW);
     delayMicroseconds(1);
@@ -395,8 +413,10 @@ void Instrument::write() {
 
     digitalWrite(PIN_CHORUS_DAC_CS, HIGH);
     spiWrapper.endTransaction();
+    exitCritical();
 
     // PGA2311
+    enterCritical();
     spiWrapper.beginTransaction(pga2311Settings);
     digitalWrite(PIN_AMP_CS, LOW);
     delayMicroseconds(3);
@@ -407,4 +427,5 @@ void Instrument::write() {
     digitalWrite(PIN_AMP_CS, HIGH);
     delayMicroseconds(3);
     spiWrapper.endTransaction();
+    exitCritical();
 }

@@ -2,6 +2,7 @@
 
 // teensy pins
 #include "SPIWrapper.h"
+#include "StableTimer.h"
 
 // #define PIN_SPI_MOSI 11 // already in teensy headers
 // #define PIN_SPI_SCK 13
@@ -51,3 +52,13 @@ extern SPIWrapperSettings dacSPISettings;
 extern SPIWrapperSettings mcp4802Settings;
 extern SPIWrapperSettings pga2311Settings;
 extern SPIWrapperSettings keyboardSPISettings;
+
+extern StableTimer clockTimer;
+
+inline void enterCritical() {
+    clockTimer.enterCriticalSection();
+}
+
+inline void exitCritical() {
+    clockTimer.exitCriticalSection();
+}

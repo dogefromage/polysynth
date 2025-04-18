@@ -3,6 +3,7 @@
 #include <climits>
 
 #include "SPIWrapper.h"
+#include "StableTimer.h"
 #include "config.h"
 #include "instrument.h"
 #include "led.h"
@@ -23,6 +24,8 @@ SPIWrapperSettings dacSPISettings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN
 SPIWrapperSettings mcp4802Settings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
 SPIWrapperSettings pga2311Settings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
 SPIWrapperSettings keyboardSPISettings(100000, MSBFIRST, SPI_MODE0, PIN_SPI_MOSI, PIN_SPI_SCK);
+
+StableTimer clockTimer;
 
 void pin_setup() {
     // seperate bitbanged pseudo-SPI line for whacky panel
@@ -121,32 +124,10 @@ void init_test_all() {
 void setup() {
     Serial.begin(115200);
 
-    while (!Serial);  // wait for serial to open
+    // while (!Serial);  // wait for serial to open
 
     pin_setup();
     analogReadAveraging(4);  // values from 1-4 https://forum.pjrc.com/index.php?threads/analog-read-on-teensy-4-0-slower-compared-to-teensy-3-6.57683/
-
-    // instr.testTuning();
-    // instr.test();
-
-    // while (1) {
-    //     digitalWrite(PIN_EN_SAW, HIGH);
-    //     printf("HIGH\n");
-    //     delay(2000);
-
-    //     digitalWrite(PIN_EN_SAW, LOW);
-    //     printf("LOW\n");
-    //     delay(2000);
-
-    //     // for (int i = 0; i < 4; i++) {
-    //     //     digitalWrite(PIN_EN_SAW, !(i & MIXER_SAW));
-    //     //     digitalWrite(PIN_EN_SQR, !(i & MIXER_SQR));
-    //     //     printf("%d\n", i);
-
-    //     //     delay(2000);
-    //     // }
-    // }
-    // instr.testChorus();
 
     player.init();
 
@@ -166,7 +147,7 @@ void setup() {
     memory_load_buffer((uint8_t*)&firstPatch, MEMORY_PRESETS_START_ADDRESS, sizeof(Patch));
     instr.getPatch() = firstPatch;
 
-    init_test_all();
+    // init_test_all();
 
     printf("\nStarting loop...\n");
 }

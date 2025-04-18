@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "SPIWrapper.h"
+#include "config.h"
 #include "instrument.h"
 #include "utils.h"
 
@@ -82,6 +83,7 @@ void dacs_write(Instrument* inst) {
         upper_dac[DAC_CH_H] = pitch_a & 0xff;
     }
 
+    enterCritical();
     spiWrapper.beginTransaction(dacSPISettings);
 
     for (int channel = 0; channel < DAC_CHANNEL_COUNT; channel++) {
@@ -103,4 +105,5 @@ void dacs_write(Instrument* inst) {
     }
 
     spiWrapper.endTransaction();
+    exitCritical();
 }

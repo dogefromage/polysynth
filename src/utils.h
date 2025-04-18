@@ -10,3 +10,6 @@ float faderLinSnap(float x, float eps);
 
 float lerp(float v, float a, float b);
 float inv_lerp(float v, float a, float b);
+
+int discretizeValue(int analogValue, int steps);
+int discretizeSwitch(int pin, int steps);

@@ -76,7 +76,7 @@ class Instrument {
     Lfo chorusLfoLeft, chorusLfoRight, syncedLfo;
     float mainVolume = 1;
 
-    int unisonDivider = 2;
+    int unisonDivisor = 1;
 
     PanelLedController& leds;
 
@@ -103,6 +103,9 @@ class Instrument {
 
     void test();
     void testChorus();
+
+    int getUnisonDivisor();
+    void setUnisonDivisor(int newDivisor);
 
     Instrument(const Instrument&) = delete;
 

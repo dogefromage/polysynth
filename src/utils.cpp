@@ -69,3 +69,16 @@ float lerp(float v, float a, float b) {
 float inv_lerp(float v, float a, float b) {
     return (v - a) / (b - a);
 }
+
+// returns a number from 0 to steps-1 indicating
+// in which division the [0, 1023] input falls
+int discretizeValue(int analogValue, int steps) {
+    int step = 1023 / (steps - 1);
+    return (analogValue + step / 2) / step;
+}
+
+// returns a number from 0 to steps-1 indicating
+// in which voltage division the analog pin voltage falls
+int discretizeSwitch(int pin, int steps) {
+    return discretizeValue(analogRead(pin), steps);
+}
