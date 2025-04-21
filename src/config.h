@@ -41,6 +41,9 @@
 #define PIN_AMP_CS 33
 #define PIN_KYBD_CS 5
 
+// #define PIN_MIDI_TX 35
+// #define PIN_MIDI_RX 34
+
 #define VERBOSE_TUNING
 
 #define ACTIVE_VOICES 8

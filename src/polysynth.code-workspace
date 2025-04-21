@@ -1,5 +1,5 @@
 {
-	"folders": [
+    "folders": [
         {
             "name": "polysynth",
             "path": ".."
@@ -53,7 +53,8 @@
             "numbers": "cpp",
             "stdexcept": "cpp",
             "cinttypes": "cpp",
-            "typeinfo": "cpp"
+            "typeinfo": "cpp",
+            "usb_names.h": "c"
         }
     },
 }

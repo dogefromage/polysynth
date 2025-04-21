@@ -36,9 +36,9 @@ class Envelope {
 
 class Lfo {
    public:
-    float drift = 0;
-    float delay = 0, time = 0, x = 0, level = 0, frequency = 1;
-    void update(float dt);
+    bool previousGate = false;
+    float delayTime = 0, time = 0, x = 0, level = 0, frequency = 1, drift = 0, amplitude = 1;
+    void update(float dt, bool gate);
 };
 
 struct TuningCorrection {

@@ -419,10 +419,17 @@ void Panel::update() {
     PlayerState playerState = player.getState();
     int16_t* playerSettings = player.getSettingsList();
 
-    USE_TOGGLE(SW_HOLD, playerSettings[PLS_HOLDING]);
+    if (playerState == PlayerState::PLSTATE_ARP || playerState == PlayerState::PLSTATE_SEQ_PLAYING) {
+        USE_TOGGLE(SW_HOLD, playerSettings[PLS_HOLDING]);
+        if (isClicked(SW_HOLD)) {
+            // clears holding sequence when turned off
+            player.updateArpSequence();
+        }
+        USE_TOGGLE(SW_KEY_TRANSPOSE, playerSettings[PLS_TRANSPOSING]);
+    } else {
+        playerSettings[PLS_HOLDING] = playerSettings[PLS_TRANSPOSING] = false;
+    }
     leds.setSingle(LED_HOLD, playerSettings[PLS_HOLDING] ? LED_MODE_ON : LED_MODE_OFF);
-
-    USE_TOGGLE(SW_KEY_TRANSPOSE, playerSettings[PLS_TRANSPOSING]);
     leds.setSingle(LED_TRANSPOSE, playerSettings[PLS_TRANSPOSING] ? LED_MODE_ON : LED_MODE_OFF);
 
     USE_TOGGLE(SW_MIDI_SYNC, playerSettings[PLS_MIDICLOCK]);

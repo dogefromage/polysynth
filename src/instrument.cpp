@@ -54,14 +54,21 @@ void Envelope::update(float dt, bool gate) {
     }
 }
 
-void Lfo::update(float dt) {
+void Lfo::update(float dt, bool gate) {
+    if (!previousGate && gate) {
+        time = 0;
+    }
+    previousGate = gate;
+    if (time < delayTime) {
+        amplitude = 0;
+    } else {
+        // really basic linear amplitude
+        amplitude = min(1, (time - delayTime) * 50);
+    }
+
     x += 2 * M_PI * (frequency + drift) * dt;
 
-    level = sineApprox(x);
-    if (time < delay) {
-        // TODO smooth attack when delay surpassed
-        level = 0;
-    }
+    level = amplitude * sineApprox(x);
     time += dt;
 }
 
@@ -71,9 +78,9 @@ void Voice::update(float dt, Patch* patch, float syncedLfoLevel) {
     env.sustain = faderLin(patch->faders[FD_SUSTAIN]);
     env.release = 10 * faderLog(patch->faders[FD_RELEASE]);
 
-    lfo.frequency = 10 * faderLog(patch->faders[FD_LFO_RATE]);
-    lfo.delay = 10 * faderLog(patch->faders[FD_LFO_DELAY]);
-    lfo.update(dt);
+    lfo.frequency = 20 * faderLog(patch->faders[FD_LFO_RATE]);
+    lfo.delayTime = 5 * faderLog(patch->faders[FD_LFO_DELAY]);
+    lfo.update(dt, gate);
 
     float lfoLevel = patch->switches[SW_LFO_SYNC] ? syncedLfoLevel : lfo.level;
 
@@ -127,9 +134,14 @@ Instrument::Instrument(PanelLedController& leds) : leds(leds) {
 
 void Instrument::update(float dt) {
     // must match implementation in voice
-    syncedLfo.frequency = 10 * faderLog(patch.faders[FD_LFO_RATE]);
-    syncedLfo.delay = 10 * faderLog(patch.faders[FD_LFO_DELAY]);
-    syncedLfo.update(dt);
+    syncedLfo.frequency = 20 * faderLog(patch.faders[FD_LFO_RATE]);
+    syncedLfo.delayTime = 5 * faderLog(patch.faders[FD_LFO_DELAY]);
+
+    bool anyGate = false;
+    for (int i = 0; i < ACTIVE_VOICES; i++) {
+        anyGate = anyGate || voices[i].gate;
+    }
+    syncedLfo.update(dt, anyGate);
 
     int numVirtualVoices = ACTIVE_VOICES / unisonDivisor;
     for (int i = numVirtualVoices; i < ACTIVE_VOICES; i++) {
@@ -166,8 +178,8 @@ void Instrument::update(float dt) {
             chorusLfoRight.x = chorusLfoLeft.x + 0.5 * M_PI;
             break;
     }
-    chorusLfoLeft.update(dt);
-    chorusLfoRight.update(dt);
+    chorusLfoLeft.update(dt, false);
+    chorusLfoRight.update(dt, false);
 
     mainVolume = settings[INS_VOLUME] / 1024.0f;
     // serialPrintf("%.2f\n", mainVolume);
@@ -327,7 +339,7 @@ void Instrument::testChorus() {
     while (1) {
         printf("%f\n", lfo.level);
 
-        lfo.update(0.1);
+        lfo.update(0.1, false);
         delay(100);
 
         float normalized = 0.25 + 0.75 * (0.5 + 0.5 * lfo.level);

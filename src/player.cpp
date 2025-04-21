@@ -1,11 +1,13 @@
 #include "player.h"
 
 #include <Arduino.h>
-#include <usb_midi.h>
+
+#include <unordered_set>
 
 #include "SPIWrapper.h"
 #include "StableTimer.h"
 #include "config.h"
+#include "midis.h"
 #include "utils.h"
 
 /**
@@ -35,6 +37,12 @@ int16_t keyMatrices[2][8][8] = {
 
 // per bank input from mux
 int keyMatrixInputs[2] = {PIN_KYBD_MUX_1, PIN_KYBD_MUX_2};
+
+enum class ArpModes {
+    UP,
+    UPDOWN,
+    DOWN
+};
 
 Player& Player::getInstance() {
     return *Player::instance;
@@ -76,6 +84,10 @@ void Player::pushSequencerNote(int note) {
     }
 
     int led = noteBufferSize % 16;
+    if (led == 0) {
+        // clear leds at start or wrap
+        leds.setAllNumbers(LedModes::LED_MODE_OFF);
+    }
     leds.setSingle((PanelLeds)(PanelLeds::LED_PATCH_01 + led), LedModes::LED_MODE_ON);
     noteBuffer[noteBufferSize] = note;
     noteBufferSize++;
@@ -85,45 +97,33 @@ void Player::pushSequencerNote(int note) {
     }
 }
 
-void Player::bubbleSortBuf() {
-    for (int n = 0; n < noteBufferSize - 1; n++) {
-        for (int i = 0; i < noteBufferSize - 1; i++) {
-            if (noteBuffer[i] > noteBuffer[i + 1]) {
-                // temp
-                int temp = noteBuffer[i];
-                noteBuffer[i] = noteBuffer[i + 1];
-                noteBuffer[i + 1] = temp;
+void swap(int* a, int* b) {
+    int c = *a;
+    *a = *b;
+    *b = c;
+}
+
+void Player::updateArpSequence() {
+    // reconstruct arp sequence from currently pressed keys
+    noteBufferSize = 0;
+    for (const auto& activeKey : activeKeys) {
+        if (activeKey.second.state == KeyStates::PRESSED) {
+            int note = keyToNote(activeKey.first);
+            noteBuffer[noteBufferSize++] = note;
+            if (noteBufferSize >= NOTE_BUFFER_MAX_SIZE) {
+                break;  // too many notes
             }
         }
     }
-}
 
-void Player::addArpNote(int note) {
-    for (int i = 0; i < noteBufferSize; i++) {
-        if (noteBuffer[i] == note) {
-            return;  // note already present
+    // sort notes
+    for (int n = 0; n < noteBufferSize - 1; n++) {
+        for (int i = 0; i < noteBufferSize - 1; i++) {
+            if (noteBuffer[i] > noteBuffer[i + 1]) {
+                swap(&noteBuffer[i], &noteBuffer[i + 1]);
+            }
         }
     }
-
-    if (noteBufferSize >= NOTE_BUFFER_MAX_SIZE) {
-        serialPrintf("exceeded arp note count\n");
-        return;
-    }
-
-    noteBuffer[noteBufferSize++] = note;
-    bubbleSortBuf();
-}
-
-void Player::removeArpNote(int note) {
-    for (int i = 0; i < noteBufferSize; i++) {
-        if (note == noteBuffer[i]) {
-            noteBuffer[i] = 9000;  // larger than any note, gets sorted to end
-            bubbleSortBuf();
-            noteBufferSize--;  // cut off this last note
-            return;
-        }
-    }
-    // here, note not found
 }
 
 void Player::setTransposition(int note) {
@@ -146,7 +146,7 @@ void Player::setTransposition(int note) {
     printf("transposing to %d\n", keyboardTransposition);
 }
 
-void Player::noteOn(int note, int velocity, bool isMidi) {
+void Player::handleNoteOn(int note, int velocity, bool isMidi) {
     // instr.scheduleNoteOn(note, velocity);
     // return;
 
@@ -158,19 +158,19 @@ void Player::noteOn(int note, int velocity, bool isMidi) {
     keyboardTransposition = 0;
 
     if (state == PLSTATE_ARP) {
-        addArpNote(note);
+        updateArpSequence();
     } else {
         instr.scheduleNoteOn(note, velocity);
 
         if (state == PLSTATE_SEQ_RECORDING) {
             pushSequencerNote(note);
         } else if (state == PLSTATE_NORMAL && !isMidi) {
-            usbMIDI.sendNoteOn(note, velocity, midiChannel);
+            midiSendNoteOn(note, velocity, midiChannel);
         }
     }
 }
 
-void Player::noteOff(int note, int velocity, bool isMidi) {
+void Player::handleNoteOff(int note, int velocity, bool isMidi) {
     // instr.scheduleNoteOff(note);
     // return;
 
@@ -179,38 +179,75 @@ void Player::noteOff(int note, int velocity, bool isMidi) {
     }
 
     if (state == PLSTATE_ARP) {
-        removeArpNote(note);
+        if (!settings[PLS_HOLDING]) {
+            updateArpSequence();
+        }
     } else {
         instr.scheduleNoteOff(note);
 
         if (state == PLSTATE_NORMAL && !isMidi) {
-            usbMIDI.sendNoteOff(note, velocity, midiChannel);
+            midiSendNoteOff(note, velocity, midiChannel);
         }
     }
 }
 
 void Player::step() {
     if (noteUpStep) {
-        instr.allNotesOff();
+        instr.scheduleNoteOff(lastStepNote);
 
     } else {
         if (state == PLSTATE_ARP && noteBufferSize > 0) {
-            // int arpMode = settings[PLS_ARP_MODE];
-            // int arpRange = settings[PLS_ARP_RANGE];
-            // ignore range and mode for now TODO
-
-            if (noteBufPosition < 0 || noteBufPosition >= noteBufferSize) {
-                noteBufPosition = 0;
-            } else {
-                noteBufPosition = (noteBufPosition + 1) % noteBufferSize;
+            ArpModes arpMode = (ArpModes)settings[PLS_ARP_MODE];
+            int arpRange = settings[PLS_ARP_RANGE];
+            int multiplier = 1;
+            switch (arpRange) {
+                case 1:
+                    multiplier = 2;
+                    break;
+                case 2:
+                    multiplier = 3;
+                    break;
             }
 
-            int note = noteBuffer[noteBufPosition] + keyboardTransposition;
+            bool isBelow = noteBufPosition < 0;
+            int arpEnd = noteBufferSize * multiplier;
+            bool isAbove = noteBufPosition >= arpEnd;
+
+            if (arpMode == ArpModes::UP) {
+                arpDownwards = false;  // for seamless transition if switched
+                if (isBelow || isAbove) {
+                    noteBufPosition = 0;
+                }
+
+            } else if (arpMode == ArpModes::UPDOWN) {
+                if (isBelow) {
+                    arpDownwards = false;
+                    noteBufPosition = min(arpEnd, 1);
+                }
+                if (isAbove) {
+                    arpDownwards = true;
+                    noteBufPosition = max(0, arpEnd - 2);
+                }
+            } else if (arpMode == ArpModes::DOWN) {
+                arpDownwards = true;  // for seamless transition if switched
+                if (isBelow || isAbove) {
+                    noteBufPosition = arpEnd - 1;
+                }
+            }
+
+            int noteIndex = noteBufPosition % noteBufferSize;
+            int currOctaveOffset = noteBufPosition / noteBufferSize;
+
+            int note = noteBuffer[noteIndex] + keyboardTransposition + 12 * currOctaveOffset;
             instr.scheduleNoteOn(note, 127);
+            lastStepNote = note;
+
+            noteBufPosition += arpDownwards ? -1 : 1;
         }
 
         if (state == PLSTATE_SEQ_PLAYING) {
             if (noteBufPosition < 0 || noteBufPosition >= noteBufferSize) {
+                // initial note or out of bounds state sets index to 0
                 noteBufPosition = 0;
             } else {
                 noteBufPosition = (noteBufPosition + 1) % noteBufferSize;
@@ -219,6 +256,7 @@ void Player::step() {
             if (noteBuffer[noteBufPosition] >= 0) {
                 int note = noteBuffer[noteBufPosition] + keyboardTransposition;
                 instr.scheduleNoteOn(note, 127);
+                lastStepNote = note;
             }
 
             int ledIndex = noteBufPosition % 16;
@@ -246,17 +284,16 @@ void Player::clockTick(bool isMidi) {
     if (state != PLSTATE_ARP && state != PLSTATE_SEQ_PLAYING) {
         return;
     }
-
     if (songMode == SongMode::Paused) {
         return;
     }
-
     bool useMidiClock = settings[PLS_MIDICLOCK];
     if (isMidi != useMidiClock) {
+        // check if is selected clock source
         return;
     }
     if (!isMidi) {
-        usbMIDI.sendClock();
+        midiSendClock();
     }
 
     int divider = 12;  // always 8th notes with builtin clock
@@ -286,21 +323,21 @@ void Player::setSongMode(SongMode mode) {
     songMode = mode;
 }
 
-void Player::usbMidiStart() {
-    Player::getInstance().resetClockProgress();
-    Player::getInstance().setSongMode(SongMode::Playing);
+void Player::handleMidiStart() {
+    resetClockProgress();
+    setSongMode(SongMode::Playing);
 }
 
-void Player::usbMidiStop() {
+void Player::handleMidiStop() {
     setSongMode(SongMode::Paused);
     instr.allNotesOff();
 }
 
-void Player::usbMidiContinue() {
+void Player::handleMidiContinue() {
     setSongMode(SongMode::Playing);
 }
 
-void Player::usbMidiHandleControlChange(uint8_t channel, uint8_t control, uint8_t value) {
+void Player::handleMidiControlChange(uint8_t channel, uint8_t control, uint8_t value) {
     switch (control) {
         case 123:
             instr.allNotesOff();
@@ -319,43 +356,43 @@ void Player::resetClockProgress() {
     noteBufPosition = -1;
 }
 
-void Player::updateKey(int key, KeyState currentState) {
+void Player::updateKey(int key, KeyStates currentState) {
     auto activeKey = activeKeys.find(key);
 
-    if (currentState == KEY_STATE_OPEN && activeKey != activeKeys.end()) {
-        if (!activeKey->second.travelling) {
-            int note = keyToNote(key);
-            noteOff(note, 0, false);
-        }
+    if (currentState == KeyStates::OPEN && activeKey != activeKeys.end()) {
+        bool wasPressed = activeKey->second.state == KeyStates::PRESSED;
         activeKeys.erase(activeKey);
+        if (wasPressed) {
+            handleNoteOff(keyToNote(key), 0, false);
+        }
     }
 
-    if (currentState == KEY_STATE_TRAVELLING && activeKey == activeKeys.end()) {
+    if (currentState == KeyStates::TRAVELLING && activeKey == activeKeys.end()) {
         // not already present
         activeKeys[key] = {
+            state : KeyStates::TRAVELLING,
             travellingMillis : millis(),
-            travelling : true
         };
     }
 
-    if (currentState == KEY_STATE_PRESSED) {
-        if (activeKey != activeKeys.end() && activeKey->second.travelling) {
+    if (currentState == KeyStates::PRESSED) {
+        if (activeKey != activeKeys.end() && activeKey->second.state == KeyStates::TRAVELLING) {
             // transition from travelling to fully pressed
-            activeKey->second.travelling = false;
+            activeKey->second.state = KeyStates::PRESSED;
 
             uint32_t deltaMillis = millis() - activeKey->second.travellingMillis;
             int velocity = calculateVelocity(deltaMillis);
             int note = keyToNote(key);
-            noteOn(note, velocity, false);
+            handleNoteOn(note, velocity, false);
         } else if (activeKey == activeKeys.end()) {
             // key did not enter travelling phase - directly start with full velocity
-            int note = keyToNote(key);
-            noteOn(note, 127, false);
-
             activeKeys[key] = {
+                state : KeyStates::PRESSED,
                 travellingMillis : 0,
-                travelling : false
             };
+
+            int note = keyToNote(key);
+            handleNoteOn(note, 127, false);
         }
     }
 }
@@ -405,10 +442,10 @@ int Player::getMidiChannel() {
 }
 
 void Player::readKeyBoard() {
-    KeyState states[NUM_KEYS];
+    KeyStates states[NUM_KEYS];
 
     for (int i = 0; i < NUM_KEYS; i++) {
-        states[i] = KEY_STATE_OPEN;
+        states[i] = KeyStates::OPEN;
     }
 
     for (int row = 0; row < 8; row++) {
@@ -442,14 +479,10 @@ void Player::readKeyBoard() {
                 if (digitalRead(keyMatrixInputs[bank])) {
                     if (button >= 100) {
                         // is second trigger
-                        states[button - 100] = KEY_STATE_PRESSED;
-                    } else {
-                        // states[button] = KEY_STATE_PRESSED;
-
+                        states[button - 100] = KeyStates::PRESSED;
+                    } else if (states[button] != KeyStates::PRESSED) {
                         // is first trigger
-                        if (states[button] == KEY_STATE_OPEN) {
-                            states[button] = KEY_STATE_TRAVELLING;
-                        }
+                        states[button] = KeyStates::TRAVELLING;
                     }
                 }
             }
@@ -468,34 +501,30 @@ Player::Player(Instrument& instr, PanelLedController& leds) : instr(instr), leds
 }
 
 void Player::init() {
-    usbMIDI.setHandleNoteOn([](uint8_t channel, uint8_t note, uint8_t velocity) {
-        Player::getInstance().noteOn(note, velocity, true);
+    midiInit();
+
+    midiSetHandleNoteOn([](uint8_t channel, uint8_t note, uint8_t velocity) {
+        Player::getInstance().handleNoteOn(note, velocity, true);
     });
-    usbMIDI.setHandleNoteOff([](uint8_t channel, uint8_t note, uint8_t velocity) {
-        Player::getInstance().noteOff(note, velocity, true);
+    midiSetHandleNoteOff([](uint8_t channel, uint8_t note, uint8_t velocity) {
+        Player::getInstance().handleNoteOff(note, velocity, true);
     });
-    usbMIDI.setHandleControlChange([](uint8_t channel, uint8_t control, uint8_t value) {
-        Player::getInstance().usbMidiHandleControlChange(channel, control, value);
+    midiSetHandleControlChange([](uint8_t channel, uint8_t control, uint8_t value) {
+        Player::getInstance().handleMidiControlChange(channel, control, value);
     });
-    usbMIDI.setHandleClock([]() { Player::getInstance().clockTick(true); });
-    usbMIDI.setHandleStart([]() { Player::getInstance().usbMidiStart(); });
-    usbMIDI.setHandleStop([]() { Player::getInstance().usbMidiStop(); });
-    usbMIDI.setHandleContinue([]() { Player::getInstance().usbMidiContinue(); });
+    midiSetHandleClock([]() { Player::getInstance().clockTick(true); });
+    midiSetHandleStart([]() { Player::getInstance().handleMidiStart(); });
+    midiSetHandleStop([]() { Player::getInstance().handleMidiStop(); });
+    midiSetHandleContinue([]() { Player::getInstance().handleMidiContinue(); });
 
     clockTimer.begin([]() { Player::getInstance().clockTick(false); });
 }
 
 void Player::update(float dt) {
-    if (midiChannel < 0) {
-        usbMIDI.read();
-    } else {
-        usbMIDI.read(midiChannel + 1);
-    }
+    midiRead(midiChannel);
 
-    // read keys
     readKeyBoard();
 
-    // play arp or seq
     float tickDuration = getClockStepSeconds(settings[PLS_RATE]);
     clockTimer.setIntervalMicroseconds((uint32_t)(1000000 * tickDuration));
 }

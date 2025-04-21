@@ -131,7 +131,7 @@ void setup() {
 
     player.init();
 
-    delay(2000);  // warm-up
+    delay(1000);  // warm-up
     instr.load_tuning();
     // instr.tune();
 
@@ -141,6 +141,8 @@ void setup() {
     instr.getVoice(3).volume_correction = 1.0;
     instr.getVoice(4).volume_correction = 0.7;
     instr.getVoice(5).volume_correction = 1.0;
+    instr.getVoice(6).volume_correction = 1.0;
+    instr.getVoice(7).volume_correction = 1.0;
 
     // set active patch equal to first
     Patch firstPatch;
