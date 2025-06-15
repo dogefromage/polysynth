@@ -12,8 +12,8 @@
 
 // extend remaining panel faders
 enum PanelFaders {
-    FD_PB_BEND = PATCH_FD__COUNT__,
-    FD_PB_MOD,
+    FD_PB_MOD = PATCH_FD__COUNT__,
+    FD_PB_BEND,
     FD_PB_MOD_VCO,
     FD_PB_MOD_VCF,
     FD_CTRL_RATE,

@@ -34,8 +34,8 @@ void solve_3x3(float A[3][3], float b[3], float x[3]) {
 // Fit a parabola y = a + bx + cx^2 using least squares
 void fit_parabola(float* x, float* y, int m, float* coefficients) {
     // Initialize sums for A^T A and A^T b
-    float S[5] = {0};     // Sums: S0 = sum(1), S1 = sum(x), ..., S4 = sum(x^4)
-    float T[3] = {0};     // T: T0 = sum(y), T1 = sum(x*y), T2 = sum(x^2*y)
+    float S[5] = {0};  // Sums: S0 = sum(1), S1 = sum(x), ..., S4 = sum(x^4)
+    float T[3] = {0};  // T: T0 = sum(y), T1 = sum(x*y), T2 = sum(x^2*y)
 
     // Compute sums iteratively
     for (int i = 0; i < m; ++i) {
@@ -58,8 +58,7 @@ void fit_parabola(float* x, float* y, int m, float* coefficients) {
     float ATA[3][3] = {
         {S[0], S[1], S[2]},
         {S[1], S[2], S[3]},
-        {S[2], S[3], S[4]}
-    };
+        {S[2], S[3], S[4]}};
     float ATb[3] = {T[0], T[1], T[2]};
 
     // Solve A^T A * x = A^T b
@@ -75,7 +74,7 @@ void fit_parabola(float* x, float* y, int m, float* coefficients) {
 
 //     fit_parabola(x, y, m, coefficients);
 
-//     printf("Fitted coefficients: a = %.2f, b = %.2f, c = %.2f\n",
+//     debugprintf("Fitted coefficients: a = %.2f, b = %.2f, c = %.2f\n",
 //            coefficients[0], coefficients[1], coefficients[2]);
 
 //     return 0;

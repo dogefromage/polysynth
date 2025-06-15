@@ -1,6 +1,6 @@
 #pragma once
 
-void serialPrintf(const char* format, ...);
+// void serialdebugprintf(const char* format, ...);
 
 float chooseValue(float a, float b, float c, int n);
 

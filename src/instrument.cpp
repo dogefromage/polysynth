@@ -72,7 +72,7 @@ void Lfo::update(float dt, bool gate) {
     time += dt;
 }
 
-void Voice::update(float dt, Patch* patch, float syncedLfoLevel) {
+void Voice::update(float dt, Patch* patch, float syncedLfoLevel, float pitchBendPitch, float modWheelAmount) {
     env.attack = 10 * faderLog(patch->faders[FD_ATTACK]);
     env.decay = 10 * faderLog(patch->faders[FD_DECAY]);
     env.sustain = faderLin(patch->faders[FD_SUSTAIN]);
@@ -93,7 +93,7 @@ void Voice::update(float dt, Patch* patch, float syncedLfoLevel) {
     float vcfEnv = 80 * faderLin(patch->faders[FD_FILTER_ENVELOPE]);
 
     float pwm = faderLin(patch->faders[FD_PULSE_WIDTH]);
-    out_pitch = note + vcoLfo * lfoLevel;
+    out_pitch = note + vcoLfo * lfoLevel + pitchBendPitch;
     out_cutoff = vcfFreq + vcfKybd * note + vcfLfo * lfoLevel + vcfEnv * env.level;
     out_pulse = chooseValue(
         0.5 + 0.5 * env.level * pwm,
@@ -149,9 +149,24 @@ void Instrument::update(float dt) {
         voices[i].gate = voices[i % numVirtualVoices].gate;
     }
 
+    // instrSettings[INS_MOD_VCO], instrSettings[INS_MOD_VCF], instrSettings[INS_PITCHBEND], instrSettings[INS_MODWHEEL]
+    float pitchBendNormalized = (float)(settings[INS_PITCHBEND] - 477) / 150.0f;
+    if (std::abs(pitchBendNormalized) < 0.08f) {
+        pitchBendNormalized = 0.0f;
+    }
+    if (pitchBendNormalized > 1) {
+        pitchBendNormalized = 1;
+    }
+    if (pitchBendNormalized < -1) {
+        pitchBendNormalized = -1;
+    }
+    float pitchBendFactor = settings[INS_BEND_OCTAVE] ? 12.0f : 2.0f;
+    float pitchBendPitch = pitchBendNormalized * pitchBendFactor;
+    float modWheelAmount = (float)(488 - settings[INS_MODWHEEL]) / 153.0f;
+
     for (int i = 0; i < ACTIVE_VOICES; i++) {
-        // serialPrintf("%u, %u, %u\n", i, voices[i].note, voices[i].gate);
-        voices[i].update(dt, &patch, syncedLfo.level);
+        // debugprintf("%u, %u, %u\n", i, voices[i].note, voices[i].gate);
+        voices[i].update(dt, &patch, syncedLfo.level, pitchBendPitch, modWheelAmount);
     }
 
     int square = patch.switches[SW_VCO_SQUARE] & 1;
@@ -182,7 +197,7 @@ void Instrument::update(float dt) {
     chorusLfoRight.update(dt, false);
 
     mainVolume = settings[INS_VOLUME] / 1024.0f;
-    // serialPrintf("%.2f\n", mainVolume);
+    // debugprintf("%.2f\n", mainVolume);
     // delay(100);
 }
 
@@ -236,7 +251,7 @@ void Instrument::scheduleNoteOn(int note, int velocity) {
     next.gate = true;
     next.schedulingTag = schedulingTagCounter++;
 
-    serialPrintf("scheduled %d -> [%d], vel=%d\n", note, oldest, velocity);
+    debugprintf("scheduled %d -> [%d], vel=%d\n", note, oldest, velocity);
 }
 
 void Instrument::scheduleNoteOff(int note) {
@@ -245,7 +260,7 @@ void Instrument::scheduleNoteOff(int note) {
         if (voices[i].gate && voices[i].note == note) {
             voices[i].gate = false;
             voices[i].schedulingTag = schedulingTagCounter++;
-            serialPrintf("scheduled note %d off [%d]\n", note, i);
+            debugprintf("scheduled note %d off [%d]\n", note, i);
             return;
         }
     }
@@ -294,7 +309,7 @@ void Instrument::test() {
         // write();
         // delay(500);
 
-        // printf("test outer loop\n");
+        // debugprintf("test outer loop\n");
 
         // for (int i = 0; i <= 100; i++) {
         //     v.out_amp = 0.01 * i;
@@ -321,13 +336,13 @@ void Instrument::test() {
 
         for (int i = 10; i < 100; i += 10) {
             v.out_pitch = (float)i;
-            printf("%.2f\n", v.out_pitch);
+            debugprintf("%.2f\n", v.out_pitch);
             write();
             delay(500);
         }
 
         // delayMicroseconds(500);
-        // serialPrintf("Test\n");
+        // debugprintf("Test\n");
         // delay(500);
     };
 }
@@ -337,7 +352,7 @@ void Instrument::testChorus() {
     lfo.frequency = 0.1;
 
     while (1) {
-        printf("%f\n", lfo.level);
+        debugprintf("%f\n", lfo.level);
 
         lfo.update(0.1, false);
         delay(100);
@@ -395,7 +410,7 @@ char chorus_level(float lfo) {
 void Instrument::write() {
     dacs_write(this);
 
-    // printf("Mixer: %d\n", mixer);
+    // debugprintf("Mixer: %d\n", mixer);
 
     digitalWrite(PIN_EN_SAW, !(mixer & MIXER_SAW));
     digitalWrite(PIN_EN_SQR, !(mixer & MIXER_SQR));

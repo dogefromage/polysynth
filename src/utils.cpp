@@ -5,25 +5,25 @@
 
 #define SERIAL_BUFFER_SIZE 2048
 
-void serialPrintf(const char* format, ...) {
-    char buf[SERIAL_BUFFER_SIZE];
+// void serialdebugprintf(const char* format, ...) {
+//     char buf[SERIAL_BUFFER_SIZE];
 
-    va_list args;
-    va_start(args, format);
+//     va_list args;
+//     va_start(args, format);
 
-    int length = vsnprintf(buf, SERIAL_BUFFER_SIZE, format, args);
+//     int length = vsndebugprintf(buf, SERIAL_BUFFER_SIZE, format, args);
 
-    va_end(args);
+//     va_end(args);
 
-    if (length < 0) {
-        Serial.print("ERROR: Error during string formatting");
-        return;
-    }
-    if (static_cast<size_t>(length) >= SERIAL_BUFFER_SIZE) {
-        Serial.print("ERROR: String is longer than buf size.");
-    }
-    Serial.print(buf);
-}
+//     if (length < 0) {
+//         Serial.print("ERROR: Error during string formatting");
+//         return;
+//     }
+//     if (static_cast<size_t>(length) >= SERIAL_BUFFER_SIZE) {
+//         Serial.print("ERROR: String is longer than buf size.");
+//     }
+//     Serial.print(buf);
+// }
 
 float chooseValue(float a, float b, float c, int n) {
     if (n == 0) {

@@ -75,11 +75,11 @@ void Player::setState(PlayerState nextState) {
 
 void Player::pushSequencerNote(int note) {
     if (state != PLSTATE_SEQ_RECORDING) {
-        serialPrintf("sequencer not recording!\n");
+        debugprintf("sequencer not recording!\n");
         return;
     }
     if (noteBufferSize >= sequenceLength) {
-        serialPrintf("sequence already full!\n");
+        debugprintf("sequence already full!\n");
         return;
     }
 
@@ -129,7 +129,7 @@ void Player::updateArpSequence() {
 void Player::setTransposition(int note) {
     // set transposition such that lowest note in note buffer is heard as given note
     if (noteBufferSize <= 0) {
-        printf("note buffer empty, returning\n");
+        debugprintf("note buffer empty, returning\n");
         return;
     }
 
@@ -143,7 +143,7 @@ void Player::setTransposition(int note) {
 
     keyboardTransposition = note - lowest;
 
-    printf("transposing to %d\n", keyboardTransposition);
+    debugprintf("transposing to %d\n", keyboardTransposition);
 }
 
 void Player::handleNoteOn(int note, int velocity, bool isMidi) {
@@ -165,7 +165,7 @@ void Player::handleNoteOn(int note, int velocity, bool isMidi) {
         if (state == PLSTATE_SEQ_RECORDING) {
             pushSequencerNote(note);
         } else if (state == PLSTATE_NORMAL && !isMidi) {
-            midiSendNoteOn(note, velocity, midiChannel);
+            midiSendNoteOn(note, velocity, MIDI_SEND_CHANNEL);
         }
     }
 }
@@ -186,7 +186,7 @@ void Player::handleNoteOff(int note, int velocity, bool isMidi) {
         instr.scheduleNoteOff(note);
 
         if (state == PLSTATE_NORMAL && !isMidi) {
-            midiSendNoteOff(note, velocity, midiChannel);
+            midiSendNoteOff(note, velocity, MIDI_SEND_CHANNEL);
         }
     }
 }
@@ -421,19 +421,19 @@ void Player::testKeyBed() {
             delayMicroseconds(200);
 
             if (digitalRead(PIN_KYBD_MUX_1)) {
-                printf("(1,%d,%d) ", row, column);
+                debugprintf("(1,%d,%d) ", row, column);
                 somethingPressed = true;
             }
 
             if (digitalRead(PIN_KYBD_MUX_2)) {
-                printf("(2,%d,%d) ", row, column);
+                debugprintf("(2,%d,%d) ", row, column);
                 somethingPressed = true;
             }
         }
     }
 
     if (somethingPressed) {
-        printf("\n");
+        debugprintf("\n");
     }
 }
 
@@ -504,12 +504,15 @@ void Player::init() {
     midiInit();
 
     midiSetHandleNoteOn([](uint8_t channel, uint8_t note, uint8_t velocity) {
+        debugprintf("MIDI note on received %x %x %x\n", note, velocity, channel);
         Player::getInstance().handleNoteOn(note, velocity, true);
     });
     midiSetHandleNoteOff([](uint8_t channel, uint8_t note, uint8_t velocity) {
+        debugprintf("MIDI note off received %x %x %x\n", note, velocity, channel);
         Player::getInstance().handleNoteOff(note, velocity, true);
     });
     midiSetHandleControlChange([](uint8_t channel, uint8_t control, uint8_t value) {
+        debugprintf("MIDI control change received %x %x %x\n", channel, control, value);
         Player::getInstance().handleMidiControlChange(channel, control, value);
     });
     midiSetHandleClock([]() { Player::getInstance().clockTick(true); });
@@ -547,13 +550,13 @@ void Player::setStateArp() {
 }
 
 void Player::setStateSeqRecording(int size) {
-    printf("Recording %d notes...\n", size);
+    debugprintf("Recording %d notes...\n", size);
     if (size <= 0) {
-        serialPrintf("invalid seq size %d\n", size);
+        debugprintf("invalid seq size %d\n", size);
         return;
     }
     if (size >= NOTE_BUFFER_MAX_SIZE) {
-        serialPrintf("seq size too large for note buffer\n");
+        debugprintf("seq size too large for note buffer\n");
         return;
     }
 

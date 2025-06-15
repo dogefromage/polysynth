@@ -135,7 +135,7 @@ void Panel::read() {
     digitalWrite(PIN_P_MUX_3, HIGH);
     delayMicroseconds(PANEL_MUX_IDLE_MICROS);
 
-    faders[FD_PB_BEND].current = analogRead(PIN_P_MUX_5);
+    faders[FD_PB_MOD].current = analogRead(PIN_P_MUX_5);
     switches[SW_PROG_NUM_14].current = !digitalRead(PIN_P_MUX_6);
 
     digitalWrite(PIN_P_MUX_A, LOW);
@@ -174,12 +174,12 @@ void Panel::read() {
     delayMicroseconds(PANEL_MUX_IDLE_MICROS);
 
     switches[SW_PROG_LOAD].current = !digitalRead(PIN_P_MUX_4);
-    faders[FD_PB_MOD].current = analogRead(PIN_P_MUX_5);
+    faders[FD_PB_BEND].current = analogRead(PIN_P_MUX_5);
     switches[SW_PROG_NUM_13].current = !digitalRead(PIN_P_MUX_6);
 }
 
 void Panel::test_print_raw_matrix() {
-    serialPrintf("\n\n%-12s%-10s%-10s%-10s%-10s%-10s\n", "mode", "1", "2", "4", "5", "6");
+    debugprintf("\n\n%-12s%-10s%-10s%-10s%-10s%-10s\n", "mode", "1", "2", "4", "5", "6");
 
     for (int i = 0; i < 16; i++) {
         int chA = (i >> 0) & 1;
@@ -207,7 +207,7 @@ void Panel::test_print_raw_matrix() {
         int r5 = analogRead(PIN_P_MUX_5);
         int r6 = analogRead(PIN_P_MUX_6);
 
-        serialPrintf("%-12s%-10d%-10d%-10d%-10d%-10d\n", mode, r1, r2, r4, r5, r6);
+        debugprintf("%-12s%-10d%-10d%-10d%-10d%-10d\n", mode, r1, r2, r4, r5, r6);
     }
 }
 
@@ -300,17 +300,17 @@ const char* fader_line(int value) {
 }
 
 void Panel::test_print_panel_elements() {
-    serialPrintf("\nPanel faders:\n");
+    debugprintf("\nPanel faders:\n");
     for (int i = FD_LFO_RATE; i <= FD_OUTPUT_VOLUME; i++) {
-        serialPrintf("%-20s | %s %s\n",
-                     fader_names[i], fader_line(faders[i].current), faders[i].active ? "ACTIVE" : "INACT.");
+        debugprintf("%-20s | %s %s\n",
+                    fader_names[i], fader_line(faders[i].current), faders[i].active ? "ACTIVE" : "INACT.");
     }
     delay(500);
 
-    serialPrintf("\nPanel switches:\n");
+    debugprintf("\nPanel switches:\n");
     for (int i = SW_AMP_SHAPE; i <= SW_PROG_NUM_16; i++) {
-        serialPrintf("%-20s | %-4d [was %-4d]\n",
-                     switch_names[i], switches[i].current, switches[i].last);
+        debugprintf("%-20s | %-4d [was %-4d]\n",
+                    switch_names[i], switches[i].current, switches[i].last);
     }
 }
 
@@ -410,6 +410,7 @@ void Panel::update() {
     // the following can be set directly
     instrSettings[INS_MOD_VCO] = faders[FD_PB_MOD_VCO].current;
     instrSettings[INS_MOD_VCF] = faders[FD_PB_MOD_VCF].current;
+    // printf("%d %d %d %d\n", instrSettings[INS_MOD_VCO], instrSettings[INS_MOD_VCF], instrSettings[INS_PITCHBEND], instrSettings[INS_MODWHEEL]);
 
     USE_TOGGLE(SW_BEND_OCTAVE, instrSettings[INS_BEND_OCTAVE]);
     leds.setSingle(LED_BEND_OCT, instrSettings[INS_BEND_OCTAVE] ? LED_MODE_ON : LED_MODE_OFF);

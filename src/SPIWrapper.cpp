@@ -1,5 +1,7 @@
 #include "SPIWrapper.h"
 
+#include "config.h"
+
 SPIWrapperSettings::SPIWrapperSettings(uint32_t clk, uint8_t order, uint8_t mode, uint8_t mosiPin, uint8_t sckPin)
     : clock(clk), bitOrder(order), dataMode(mode), mosi_pin(mosiPin), sck_pin(sckPin) {}
 
@@ -11,7 +13,7 @@ void SPIWrapper::beginTransaction(const SPIWrapperSettings& settings) {
     use_bitbang = settings.clock < bitbang_threshold;
     current_settings = settings;
 
-    // printf("beginning transaction(%ld, %d, %d, %d, %d) bb=%u\n", settings.clock, settings.bitOrder, settings.dataMode, settings.mosi_pin, settings.sck_pin, use_bitbang);
+    // debugprintf("beginning transaction(%ld, %d, %d, %d, %d) bb=%u\n", settings.clock, settings.bitOrder, settings.dataMode, settings.mosi_pin, settings.sck_pin, use_bitbang);
 
     if (use_bitbang) {
         pinMode(settings.mosi_pin, OUTPUT);
@@ -24,10 +26,10 @@ void SPIWrapper::beginTransaction(const SPIWrapperSettings& settings) {
         SPI.setSCK(PIN_SPI_SCK);
 
         if (settings.mosi_pin != PIN_SPI_MOSI) {
-            printf("ERROR mosi pin must match builtin one\n");
+            debugprintf("ERROR mosi pin must match builtin one\n");
         }
         if (settings.sck_pin != PIN_SPI_SCK) {
-            printf("ERROR mosi pin must match builtin one\n");
+            debugprintf("ERROR mosi pin must match builtin one\n");
         }
         SPI.beginTransaction(SPISettings(settings.clock, settings.bitOrder, settings.dataMode));
     }

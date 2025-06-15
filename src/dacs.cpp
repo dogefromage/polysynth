@@ -66,11 +66,11 @@ void dacs_write(Instrument* inst) {
         uint16_t cutoff_a = semis_to_short(apply_correction(voice_a->out_cutoff, &voice_a->cutoff_correction));
         uint16_t cutoff_b = semis_to_short(apply_correction(voice_b->out_cutoff, &voice_b->cutoff_correction));
 
-        // serialPrintf("pulsea %u, pulseb %u, resb %u, vcab %u, resa %u, vcaa %u, subb %u, suba %u\n",
+        // debugprintf("pulsea %u, pulseb %u, resb %u, vcab %u, resa %u, vcaa %u, subb %u, suba %u\n",
         //     lower_dac[DAC_CH_A], lower_dac[DAC_CH_B], lower_dac[DAC_CH_C], lower_dac[DAC_CH_D],
         //     lower_dac[DAC_CH_E], lower_dac[DAC_CH_F], lower_dac[DAC_CH_G], lower_dac[DAC_CH_H]);
 
-        // serialPrintf("pitch_a %u, pitch_b %u, cutoff_a %u, cutoff_b %u\n",
+        // debugprintf("pitch_a %u, pitch_b %u, cutoff_a %u, cutoff_b %u\n",
         //     pitch_a, pitch_b, cutoff_a, cutoff_b);
 
         upper_dac[DAC_CH_A] = (cutoff_b >> 8) & 0xff;

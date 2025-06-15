@@ -7,6 +7,8 @@
 
 #define NOTE_BUFFER_MAX_SIZE 256
 
+#define MIDI_SEND_CHANNEL 5
+
 enum PlayerState {
     PLSTATE_NORMAL,
     PLSTATE_ARP,

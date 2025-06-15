@@ -65,3 +65,9 @@ inline void enterCritical() {
 inline void exitCritical() {
     clockTimer.exitCriticalSection();
 }
+
+#if 0
+#define debugprintf printf
+#else
+#define debugprintf(...) void
+#endif

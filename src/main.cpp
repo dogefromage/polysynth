@@ -79,38 +79,38 @@ void pin_setup() {
 }
 
 void init_test_all() {
-    printf("\nTesting:\n");
+    debugprintf("\nTesting:\n");
     delay(500);
 
-    printf("\nTesting Panel Read\n");
+    debugprintf("\nTesting Panel Read\n");
     panel.read();
     delay(500);
 
-    printf("\nTesting Panel Update\n");
+    debugprintf("\nTesting Panel Update\n");
     panel.update();
 
-    printf("\nTesting Player Update\n");
+    debugprintf("\nTesting Player Update\n");
     player.update(0.1);
     delay(500);
 
-    printf("\nTesting Instrument Update\n");
+    debugprintf("\nTesting Instrument Update\n");
     instr.update(0.1);
     delay(500);
 
-    printf("\nTesting Instrument Write\n");
+    debugprintf("\nTesting Instrument Write\n");
     instr.write();
     delay(500);
 
     // // TEST PANEL READ AND LABELED
-    printf("\nTesting Panel elements\n");
+    debugprintf("\nTesting Panel elements\n");
     panel.read();
     panel.test_print_panel_elements();
     delay(1000);
 
     // TEST LEDS
-    printf("\nTesting LEDs\n");
+    debugprintf("\nTesting LEDs\n");
     for (int i = LED__COUNT__ - 1; i >= 0; i--) {
-        serialPrintf("%d\n", i);
+        debugprintf("%d\n", i);
         leds.setAll(LED_MODE_OFF);
         leds.setSingle((PanelLeds)i, LED_MODE_ON);
         leds.write();
@@ -118,13 +118,14 @@ void init_test_all() {
     }
     delay(1000);
 
-    printf("\nTesting done!\n");
+    debugprintf("\nTesting done!\n");
 }
 
 void setup() {
     Serial.begin(115200);
-
     // while (!Serial);  // wait for serial to open
+
+    printf("Hello! starting setup...");
 
     pin_setup();
     analogReadAveraging(4);  // values from 1-4 https://forum.pjrc.com/index.php?threads/analog-read-on-teensy-4-0-slower-compared-to-teensy-3-6.57683/
@@ -150,8 +151,6 @@ void setup() {
     instr.getPatch() = firstPatch;
 
     // init_test_all();
-
-    printf("\nStarting loop...\n");
 }
 
 unsigned long previousMicros = 0;
@@ -178,7 +177,7 @@ void loop() {
 
     int secondsInt = (int)secondCounter;
     if (secondsInt - lastSecondPrint >= 10) {
-        printf("%u seconds, %d loops\n", secondsInt, loopCounter);
+        debugprintf("%u seconds, %d loops\n", secondsInt, loopCounter);
         lastSecondPrint = secondsInt;
         loopCounter = 0;
     }

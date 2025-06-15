@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "config.h"
+
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial8, MIDI);
 
 void midiInit() {
@@ -9,21 +11,24 @@ void midiInit() {
 }
 
 void midiRead(int channel) {
-    MIDI.read(channel);
-    usbMIDI.read(channel);
+    while (MIDI.read(channel));
+    while (usbMIDI.read(channel));
 }
 
 void midiSendNoteOn(uint8_t note, uint8_t velocity, uint8_t channel) {
+    debugprintf("MIDI sendNoteOn %x %x %x\n", note, velocity, channel);
     MIDI.sendNoteOn(note, velocity, channel);
     usbMIDI.sendNoteOn(note, velocity, channel);
 }
 
 void midiSendNoteOff(uint8_t note, uint8_t velocity, uint8_t channel) {
+    debugprintf("MIDI sendNoteOff %x %x %x\n", note, velocity, channel);
     MIDI.sendNoteOff(note, velocity, channel);
     usbMIDI.sendNoteOff(note, velocity, channel);
 }
 
 void midiSendClock() {
+    debugprintf("MIDI sendClock\n");
     MIDI.sendClock();
     usbMIDI.sendClock();
 }

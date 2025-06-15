@@ -28,7 +28,7 @@ static void measurePitchSubroutine() {
     }
     tuningCycles++;
 
-    // serialPrintf("tuningCycles %u, isTuning %d\n", tuningCycles);
+    // debugprintf("tuningCycles %u, isTuning %d\n", tuningCycles);
 }
 
 float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
@@ -46,7 +46,7 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
 
     tuningCycles = 0;
     isTuning = true;
-    // serialPrintf("attached interupt %u\n", digitalPinToInterrupt(PIN_AUDIO_LOOPBACK));
+    // debugprintf("attached interupt %u\n", digitalPinToInterrupt(PIN_AUDIO_LOOPBACK));
     attachInterrupt(digitalPinToInterrupt(PIN_AUDIO_LOOPBACK), measurePitchSubroutine, RISING);
 
     unsigned long maxWaitTime = millis() + 2000;
@@ -57,8 +57,8 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
         if (millis() > maxWaitTime) {
             detachInterrupt(digitalPinToInterrupt(PIN_AUDIO_LOOPBACK));
 #ifdef VERBOSE_TUNING
-            serialPrintf("[%d] (%s) Tuning timeout, semis=%.2f\n",
-                         voiceIndex, isFilter ? "cutoff" : "pitch", semis);
+            debugprintf("[%d] (%s) Tuning timeout, semis=%.2f\n",
+                        voiceIndex, isFilter ? "cutoff" : "pitch", semis);
 #endif
             return -1;
         }
@@ -99,16 +99,16 @@ int Instrument::findTuningProfile(int voiceIndex, float semis_min, float semis_m
         x[i] = ideal_semis;
         y[i] = test_semis;
 
-        printf("[%d] (%s) %-10.3f%-10.3f%-10.3f\n",
-               voiceIndex, isFilter ? "cutoff" : "pitch", test_semis, test_freq, ideal_semis);
+        debugprintf("[%d] (%s) %-10.3f%-10.3f%-10.3f\n",
+                    voiceIndex, isFilter ? "cutoff" : "pitch", test_semis, test_freq, ideal_semis);
     }
 
     // solve LSQ
     fit_parabola(x, y, TUNING_SAMPLES, corr->parabolic);
 
 #ifdef VERBOSE_TUNING
-    printf("%-6d%-7s a+bx+cx^2: %-10.3f%-10.3f%-10.3f\n",
-           voiceIndex, isFilter ? "cutoff" : "pitch", corr->parabolic[0], corr->parabolic[1], corr->parabolic[2]);
+    debugprintf("%-6d%-7s a+bx+cx^2: %-10.3f%-10.3f%-10.3f\n",
+                voiceIndex, isFilter ? "cutoff" : "pitch", corr->parabolic[0], corr->parabolic[1], corr->parabolic[2]);
 #endif
 
     return 0;
@@ -144,7 +144,7 @@ void Instrument::tune() {
     mainVolume = 0;
 
 #ifdef VERBOSE_TUNING
-    printf("Tuning:\n");
+    debugprintf("Tuning:\n");
 #endif
 
     leds.setAllNumbers(LedModes::LED_MODE_OFF);
@@ -199,9 +199,9 @@ void Instrument::testTuning() {
     totalTuningCycles = 100;
 
     for (int j = 5; j < 150; j += 5) {
-        printf("%-10d", j);
+        debugprintf("%-10d", j);
     }
-    printf("\n");
+    debugprintf("\n");
 
     for (int i = 0; i < ACTIVE_VOICES; i++) {
         // mute all voices
@@ -229,9 +229,9 @@ void Instrument::testTuning() {
             reset_correction(voice.cutoff_correction);
 
             float freq = measureFrequency(i, (float)j, true);
-            printf("%-10.1f", freq);
+            debugprintf("%-10.1f", freq);
         }
-        printf("\n");
+        debugprintf("\n");
     }
 
     while (1);
@@ -242,15 +242,15 @@ void Instrument::testTuning() {
 
 //     int testVoice = 0;
 
-//     printf("%-10s", "cycles");
+//     debugprintf("%-10s", "cycles");
 //     for (int j = 5; j < 150; j += 5) {
-//         printf("%-10d", j);
+//         debugprintf("%-10d", j);
 //     }
-//     printf("\n");
+//     debugprintf("\n");
 
 //     for (totalTuningCycles = 10 ; totalTuningCycles <= 1000; totalTuningCycles *= 2) {
 
-//         printf("%-10d", totalTuningCycles);
+//         debugprintf("%-10d", totalTuningCycles);
 
 //         // mute all voices
 //         for (int j = 0; j < VOICE_COUNT; j++) {
@@ -278,9 +278,9 @@ void Instrument::testTuning() {
 //             voice.cutoff_correction.intersept = 0;
 
 //             float freq = measureFrequency(testVoice, (float)j, false);
-//             printf("%-10.2f", freq);
+//             debugprintf("%-10.2f", freq);
 //         }
-//         printf("\n");
+//         debugprintf("\n");
 //     }
 
 //     while (1);
