@@ -8,7 +8,7 @@
 #include "instrument.h"
 #include "led.h"
 #include "memory.h"
-#include "midi.h"
+#include "midis.h"
 #include "panel.h"
 #include "player.h"
 #include "utils.h"

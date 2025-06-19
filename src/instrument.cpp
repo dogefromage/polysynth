@@ -16,6 +16,12 @@ static float clamp01(float x) {
     return x;
 }
 
+static float clamp(float x, float lo, float hi) {
+    if (x < lo) x = lo;
+    if (x > hi) x = hi;
+    return x;
+}
+
 #define ADSR_EPS 0.05
 #define ADSR_MINUS_LN_EPS 2.9957
 
@@ -72,7 +78,7 @@ void Lfo::update(float dt, bool gate) {
     time += dt;
 }
 
-void Voice::update(float dt, Patch* patch, float syncedLfoLevel, float pitchBendPitch, float modWheelAmount) {
+void Voice::update(float dt, Patch* patch, int16_t* settings, float syncedLfoVoltage, float pitchBend, float modWheel) {
     env.attack = 10 * faderLog(patch->faders[FD_ATTACK]);
     env.decay = 10 * faderLog(patch->faders[FD_DECAY]);
     env.sustain = faderLin(patch->faders[FD_SUSTAIN]);
@@ -82,7 +88,7 @@ void Voice::update(float dt, Patch* patch, float syncedLfoLevel, float pitchBend
     lfo.delayTime = 5 * faderLog(patch->faders[FD_LFO_DELAY]);
     lfo.update(dt, gate);
 
-    float lfoLevel = patch->switches[SW_LFO_SYNC] ? syncedLfoLevel : lfo.level;
+    float lfoVoltage = patch->switches[SW_LFO_SYNC] ? syncedLfoVoltage : lfo.level;
 
     env.update(dt, gate);
 
@@ -92,12 +98,20 @@ void Voice::update(float dt, Patch* patch, float syncedLfoLevel, float pitchBend
     float vcfLfo = 30 * faderLog(patch->faders[FD_FILTER_LFO]);
     float vcfEnv = 80 * faderLin(patch->faders[FD_FILTER_ENVELOPE]);
 
+    float modVibratoFactor = 20 * faderLog(settings[INS_MOD_VCO]);
+    float modTremoloFactor = 40 * faderLog(settings[INS_MOD_VCF]);
+    float vibrato = vcoLfo + modVibratoFactor * modWheel;
+    float tremolo = vcfLfo + modTremoloFactor * modWheel;
+
+    float pitchBendRange = settings[INS_BEND_OCTAVE] ? 12.0f : 2.0f;
+    float pitchBendPitch = pitchBend * pitchBendRange;
+
     float pwm = faderLin(patch->faders[FD_PULSE_WIDTH]);
-    out_pitch = note + vcoLfo * lfoLevel + pitchBendPitch;
-    out_cutoff = vcfFreq + vcfKybd * note + vcfLfo * lfoLevel + vcfEnv * env.level;
+    out_pitch = note + vibrato * lfoVoltage + pitchBendPitch;
+    out_cutoff = vcfFreq + vcfKybd * note + tremolo * lfoVoltage + vcfEnv * env.level;
     out_pulse = chooseValue(
         0.5 + 0.5 * env.level * pwm,
-        0.5 + 0.5 * lfoLevel * pwm,
+        0.5 + 0.5 * lfoVoltage * pwm,
         pwm,
         patch->switches[SW_VCO_PWM_SOURCE]);
     out_sub = faderLin(patch->faders[FD_SUB_OSCILLATOR]);
@@ -150,23 +164,21 @@ void Instrument::update(float dt) {
     }
 
     // instrSettings[INS_MOD_VCO], instrSettings[INS_MOD_VCF], instrSettings[INS_PITCHBEND], instrSettings[INS_MODWHEEL]
-    float pitchBendNormalized = (float)(settings[INS_PITCHBEND] - 477) / 150.0f;
-    if (std::abs(pitchBendNormalized) < 0.08f) {
-        pitchBendNormalized = 0.0f;
-    }
-    if (pitchBendNormalized > 1) {
-        pitchBendNormalized = 1;
-    }
-    if (pitchBendNormalized < -1) {
-        pitchBendNormalized = -1;
-    }
-    float pitchBendFactor = settings[INS_BEND_OCTAVE] ? 12.0f : 2.0f;
-    float pitchBendPitch = pitchBendNormalized * pitchBendFactor;
-    float modWheelAmount = (float)(488 - settings[INS_MODWHEEL]) / 153.0f;
+    float pitchBend = (float)(settings[INS_PITCHBEND] - 477) / 150.0f;
+    const float pitchBendThreshold = 0.1;
+    pitchBend -= clamp(pitchBend, -pitchBendThreshold, pitchBendThreshold);
+    pitchBend *= 1.0 / (1.0 - pitchBendThreshold);
+    pitchBend = clamp(pitchBend, -1.0, 1.0);
+
+    float modWheel = (float)(488 - settings[INS_MODWHEEL]) / 153.0f;
+    const float modWheelThreshold = 0.05;
+    modWheel -= clamp(modWheel, 0, modWheelThreshold);
+    modWheel *= 1.0 / (1.0 - modWheelThreshold);
+    modWheel = clamp(modWheel, 0.0, 1.0);
 
     for (int i = 0; i < ACTIVE_VOICES; i++) {
         // debugprintf("%u, %u, %u\n", i, voices[i].note, voices[i].gate);
-        voices[i].update(dt, &patch, syncedLfo.level, pitchBendPitch, modWheelAmount);
+        voices[i].update(dt, &patch, settings, syncedLfo.level, pitchBend, modWheel);
     }
 
     int square = patch.switches[SW_VCO_SQUARE] & 1;

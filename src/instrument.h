@@ -65,7 +65,7 @@ struct Voice {
     TuningCorrection pitch_correction, cutoff_correction;
     float volume_correction = 1;
 
-    void update(float dt, Patch* patch, float syncedLfoLevel, float pitchBendPitch, float modWheelAmount);
+    void update(float dt, Patch* patch, int16_t* settings, float syncedLfoLevel, float pitchBend, float modWheel);
 };
 
 class Instrument {
