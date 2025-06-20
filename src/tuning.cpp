@@ -46,6 +46,9 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
 
     tuningCycles = 0;
     isTuning = true;
+
+    enterCritical();
+
     // debugprintf("attached interupt %u\n", digitalPinToInterrupt(PIN_AUDIO_LOOPBACK));
     attachInterrupt(digitalPinToInterrupt(PIN_AUDIO_LOOPBACK), measurePitchSubroutine, RISING);
 
@@ -63,6 +66,8 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
             return -1;
         }
     }
+
+    exitCritical();
 
     unsigned long elapsedMicros = microsTuningEnd - microsTuningStart;
     float freq = totalTuningCycles / (elapsedMicros / 1000000.0);
@@ -114,32 +119,25 @@ int Instrument::findTuningProfile(int voiceIndex, float semis_min, float semis_m
     return 0;
 }
 
-Patch& Instrument::getPatch() {
-    return patch;
-}
-
-Voice& Instrument::getVoice(int i) {
-    return voices[i];
-}
-
-int16_t* Instrument::getSettings() {
-    return settings;
-}
-
 void Instrument::load_tuning() {
-    TuningCorrection corrections[2 * ACTIVE_VOICES];
+    MemoryBlockTuning tuningMemory;
+    // TuningCorrection corrections[2 * ACTIVE_VOICES];
 
-    memory_load_buffer((uint8_t*)&corrections, MEMORY_TUNING_START_ADDRESS, sizeof(corrections));
+    memory_load_buffer((uint8_t*)&tuningMemory, MEMORY_TUNING_START_ADDRESS, sizeof(MemoryBlockTuning));
 
     for (int i = 0; i < ACTIVE_VOICES; i++) {
         Voice& voice = voices[i];
-        voice.pitch_correction = corrections[2 * i + 0];
-        voice.cutoff_correction = corrections[2 * i + 1];
+        voice.pitch_correction = tuningMemory.corrections[i][0];
+        voice.cutoff_correction = tuningMemory.corrections[i][1];
     }
+
+    modCenter = tuningMemory.modCenter;
+    pitchBendCenter = tuningMemory.pitchBendCenter;
 }
 
 void Instrument::tune() {
-    TuningCorrection newCorrections[2 * ACTIVE_VOICES];
+    MemoryBlockTuning tuningMemory;
+    // TuningCorrection newCorrections[2 * ACTIVE_VOICES];
 
     mainVolume = 0;
 
@@ -186,12 +184,38 @@ void Instrument::tune() {
             errored ? LedModes::LED_MODE_OFF : LedModes::LED_MODE_ON);
         leds.write();
 
-        newCorrections[2 * i + 0] = voice.pitch_correction;
-        newCorrections[2 * i + 1] = voice.cutoff_correction;
+        tuningMemory.corrections[i][0] = voice.pitch_correction;
+        tuningMemory.corrections[i][1] = voice.cutoff_correction;
     }
 
+    int numSamples = 4;
+    digitalWrite(PIN_P_MUX_A, HIGH);
+    digitalWrite(PIN_P_MUX_B, HIGH);
+    digitalWrite(PIN_P_MUX_C, HIGH);
+    digitalWrite(PIN_P_MUX_3, HIGH);
+    for (int i = 0; i < numSamples; i++) {
+        delayMicroseconds(100);
+        pitchBendCenter += (float)analogRead(PIN_P_MUX_5);
+    }
+    pitchBendCenter /= numSamples;
+
+    digitalWrite(PIN_P_MUX_A, HIGH);
+    digitalWrite(PIN_P_MUX_B, LOW);
+    digitalWrite(PIN_P_MUX_C, HIGH);
+    digitalWrite(PIN_P_MUX_3, HIGH);
+    for (int i = 0; i < 4; i++) {
+        delayMicroseconds(100);
+        modCenter += (float)analogRead(PIN_P_MUX_5);
+    }
+    modCenter /= numSamples;
+
+    printf("%.2f %.2f\n", pitchBendCenter, modCenter);
+
+    tuningMemory.pitchBendCenter = pitchBendCenter;
+    tuningMemory.modCenter = modCenter;
+
     // save tuning
-    memory_save_buffer((uint8_t*)&newCorrections, MEMORY_TUNING_START_ADDRESS, sizeof(newCorrections));
+    memory_save_buffer((uint8_t*)&tuningMemory, MEMORY_TUNING_START_ADDRESS, sizeof(MemoryBlockTuning));
 }
 
 void Instrument::testTuning() {
@@ -236,52 +260,3 @@ void Instrument::testTuning() {
 
     while (1);
 }
-
-// void Instrument::testTuning() {
-//     mainVolume = 0;
-
-//     int testVoice = 0;
-
-//     debugprintf("%-10s", "cycles");
-//     for (int j = 5; j < 150; j += 5) {
-//         debugprintf("%-10d", j);
-//     }
-//     debugprintf("\n");
-
-//     for (totalTuningCycles = 10 ; totalTuningCycles <= 1000; totalTuningCycles *= 2) {
-
-//         debugprintf("%-10d", totalTuningCycles);
-
-//         // mute all voices
-//         for (int j = 0; j < VOICE_COUNT; j++) {
-//             voices[j].out_amp = 0.0;
-//         }
-//         Voice& voice = voices[testVoice];
-
-//         // OSCILLATOR PITCH
-//         mixer = MIXER_SQR;
-//         voice.out_cutoff = 120;
-//         voice.out_pulse = 0.5;
-//         voice.out_resonance = 0;
-//         voice.out_sub = 0;
-//         voice.out_amp = 1;
-
-//         // mixer = 0;
-//         // voice.out_resonance = 0.6;
-//         // voice.out_amp = 1;
-
-//         for (int j = 5; j < 150; j += 5) {
-//             // reset
-//             voice.pitch_correction.slope = 1;
-//             voice.pitch_correction.intersept = 0;
-//             voice.cutoff_correction.slope = 1;
-//             voice.cutoff_correction.intersept = 0;
-
-//             float freq = measureFrequency(testVoice, (float)j, false);
-//             debugprintf("%-10.2f", freq);
-//         }
-//         debugprintf("\n");
-//     }
-
-//     while (1);
-// }

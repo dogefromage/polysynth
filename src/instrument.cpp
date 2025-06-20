@@ -98,8 +98,8 @@ void Voice::update(float dt, Patch* patch, int16_t* settings, float syncedLfoVol
     float vcfLfo = 30 * faderLog(patch->faders[FD_FILTER_LFO]);
     float vcfEnv = 80 * faderLin(patch->faders[FD_FILTER_ENVELOPE]);
 
-    float modVibratoFactor = 20 * faderLog(settings[INS_MOD_VCO]);
-    float modTremoloFactor = 40 * faderLog(settings[INS_MOD_VCF]);
+    float modVibratoFactor = 25 * faderLog(settings[INS_MOD_VCO]);
+    float modTremoloFactor = 60 * faderLog(settings[INS_MOD_VCF]);
     float vibrato = vcoLfo + modVibratoFactor * modWheel;
     float tremolo = vcfLfo + modTremoloFactor * modWheel;
 
@@ -127,6 +127,7 @@ Instrument::Instrument(PanelLedController& leds) : leds(leds) {
     memset(settings, 0, sizeof(settings));
 
     patch.switches[PatchSwitches::SW_VCO_SAW] = 1;
+    patch.switches[PatchSwitches::SW_VCO_SQUARE] = 0;
 
     settings[INS_VOLUME] = 900;
 
@@ -164,13 +165,13 @@ void Instrument::update(float dt) {
     }
 
     // instrSettings[INS_MOD_VCO], instrSettings[INS_MOD_VCF], instrSettings[INS_PITCHBEND], instrSettings[INS_MODWHEEL]
-    float pitchBend = (float)(settings[INS_PITCHBEND] - 477) / 150.0f;
+    float pitchBend = (float)(settings[INS_PITCHBEND] - pitchBendCenter) / 150.0f;
     const float pitchBendThreshold = 0.1;
     pitchBend -= clamp(pitchBend, -pitchBendThreshold, pitchBendThreshold);
     pitchBend *= 1.0 / (1.0 - pitchBendThreshold);
     pitchBend = clamp(pitchBend, -1.0, 1.0);
 
-    float modWheel = (float)(488 - settings[INS_MODWHEEL]) / 153.0f;
+    float modWheel = (float)(modCenter - settings[INS_MODWHEEL]) / 153.0f;
     const float modWheelThreshold = 0.05;
     modWheel -= clamp(modWheel, 0, modWheelThreshold);
     modWheel *= 1.0 / (1.0 - modWheelThreshold);
@@ -208,7 +209,15 @@ void Instrument::update(float dt) {
     chorusLfoLeft.update(dt, false);
     chorusLfoRight.update(dt, false);
 
-    mainVolume = settings[INS_VOLUME] / 1024.0f;
+    float volumeFactor = 1;
+    if (chorus1) {
+        volumeFactor *= 0.95;
+    }
+    if (chorus2) {
+        volumeFactor *= 0.9;
+    }
+
+    mainVolume = volumeFactor * (settings[INS_VOLUME] / 1024.0f);
     // debugprintf("%.2f\n", mainVolume);
     // delay(100);
 }
@@ -467,4 +476,16 @@ void Instrument::write() {
     delayMicroseconds(3);
     spiWrapper.endTransaction();
     exitCritical();
+}
+
+Patch& Instrument::getPatch() {
+    return patch;
+}
+
+Voice& Instrument::getVoice(int i) {
+    return voices[i];
+}
+
+int16_t* Instrument::getSettings() {
+    return settings;
 }

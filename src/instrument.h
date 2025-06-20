@@ -75,6 +75,7 @@ class Instrument {
     int schedulingTagCounter = 0;
     Lfo chorusLfoLeft, chorusLfoRight, syncedLfo;
     float mainVolume = 1;
+    float modCenter, pitchBendCenter;
 
     int unisonDivisor = 1;
 
