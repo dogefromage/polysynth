@@ -165,13 +165,17 @@ void Instrument::update(float dt) {
     }
 
     // instrSettings[INS_MOD_VCO], instrSettings[INS_MOD_VCF], instrSettings[INS_PITCHBEND], instrSettings[INS_MODWHEEL]
-    float pitchBend = (float)(settings[INS_PITCHBEND] - pitchBendCenter) / 150.0f;
+    float pitchBend = ((float)settings[INS_PITCHBEND] - pitchBendCenter) / 150.0f;
+    // printf("settings[INS_PITCHBEND]=%f, pitchBendCenter=%f, pitchBend=%f\n", (float)settings[INS_PITCHBEND], pitchBendCenter, pitchBend);
+
     const float pitchBendThreshold = 0.1;
     pitchBend -= clamp(pitchBend, -pitchBendThreshold, pitchBendThreshold);
     pitchBend *= 1.0 / (1.0 - pitchBendThreshold);
     pitchBend = clamp(pitchBend, -1.0, 1.0);
 
-    float modWheel = (float)(modCenter - settings[INS_MODWHEEL]) / 153.0f;
+    float modWheel = ((float)modCenter - settings[INS_MODWHEEL]) / 153.0f;
+    // printf("modWheel=%f\n", modWheel);
+
     const float modWheelThreshold = 0.05;
     modWheel -= clamp(modWheel, 0, modWheelThreshold);
     modWheel *= 1.0 / (1.0 - modWheelThreshold);

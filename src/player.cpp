@@ -356,14 +356,17 @@ void Player::resetClockProgress() {
     noteBufPosition = -1;
 }
 
-void Player::updateKey(int key, KeyStates currentState) {
+void Player::updateKey(int key, KeyStates currentState, bool sustaining) {
     auto activeKey = activeKeys.find(key);
 
     if (currentState == KeyStates::OPEN && activeKey != activeKeys.end()) {
         bool wasPressed = activeKey->second.state == KeyStates::PRESSED;
-        activeKeys.erase(activeKey);
-        if (wasPressed) {
-            handleNoteOff(keyToNote(key), 0, false);
+
+        if (!sustaining) {
+            activeKeys.erase(activeKey);
+            if (wasPressed) {
+                handleNoteOff(keyToNote(key), 0, false);
+            }
         }
     }
 
@@ -489,8 +492,10 @@ void Player::readKeyBoard() {
         }
     }
 
+    bool sustaining = !digitalRead(PIN_FTSW);
+
     for (int i = 0; i < NUM_KEYS; i++) {
-        updateKey(i, states[i]);
+        updateKey(i, states[i], sustaining);
     }
 }
 

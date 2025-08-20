@@ -76,7 +76,7 @@ class Player {
     void pushSequencerNote(int note);
     void setTransposition(int note);
     int keyToNote(int key);
-    void updateKey(int key, KeyStates currentState);
+    void updateKey(int key, KeyStates currentState, bool sustaining);
     void readKeyBoard();
     void step();
 

@@ -61,6 +61,8 @@ void pin_setup() {
     pinMode(PIN_P_MUX_5, INPUT);
     pinMode(PIN_P_MUX_6, INPUT);
 
+    pinMode(PIN_FTSW, INPUT_PULLUP);
+
     pinMode(PIN_CHORUS_1, OUTPUT);
     pinMode(PIN_CHORUS_2, OUTPUT);
     digitalWrite(PIN_CHORUS_1, HIGH);
@@ -194,4 +196,6 @@ void loop() {
 
     leds.update(dt);
     leds.write();
+
+    // printf("PIN_FTSW=%d\n", digitalRead(PIN_FTSW));
 }

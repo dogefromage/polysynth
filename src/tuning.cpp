@@ -133,6 +133,7 @@ void Instrument::load_tuning() {
 
     modCenter = tuningMemory.modCenter;
     pitchBendCenter = tuningMemory.pitchBendCenter;
+    // printf("modCenter=%f, pitchBendCenter=%f\n", modCenter, pitchBendCenter);
 }
 
 void Instrument::tune() {
@@ -193,6 +194,7 @@ void Instrument::tune() {
     digitalWrite(PIN_P_MUX_B, HIGH);
     digitalWrite(PIN_P_MUX_C, HIGH);
     digitalWrite(PIN_P_MUX_3, HIGH);
+    pitchBendCenter = 0;
     for (int i = 0; i < numSamples; i++) {
         delayMicroseconds(100);
         pitchBendCenter += (float)analogRead(PIN_P_MUX_5);
@@ -203,13 +205,13 @@ void Instrument::tune() {
     digitalWrite(PIN_P_MUX_B, LOW);
     digitalWrite(PIN_P_MUX_C, HIGH);
     digitalWrite(PIN_P_MUX_3, HIGH);
+    modCenter = 0;
     for (int i = 0; i < 4; i++) {
         delayMicroseconds(100);
         modCenter += (float)analogRead(PIN_P_MUX_5);
     }
     modCenter /= numSamples;
-
-    printf("%.2f %.2f\n", pitchBendCenter, modCenter);
+    // printf("%.2f %.2f\n", pitchBendCenter, modCenter);
 
     tuningMemory.pitchBendCenter = pitchBendCenter;
     tuningMemory.modCenter = modCenter;

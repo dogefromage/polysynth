@@ -35,6 +35,8 @@
 #define PIN_CHORUS_1 36
 #define PIN_CHORUS_2 37
 
+#define PIN_FTSW 39
+
 #define PIN_P_SR_RCLK 20
 #define PIN_CHORUS_DAC_CS 31
 #define PIN_DAC_CS 32
