@@ -309,7 +309,6 @@ void Player::clockTick(bool isMidi) {
 }
 
 static int calculateVelocity(uint32_t millis) {
-    // TODO: fix this shitty curve
     return std::min(127, 1000 / (int)millis);
 }
 
@@ -362,6 +361,7 @@ void Player::updateKey(int key, KeyStates currentState, bool sustaining) {
     if (currentState == KeyStates::OPEN && activeKey != activeKeys.end()) {
         bool wasPressed = activeKey->second.state == KeyStates::PRESSED;
 
+        // TODO fix this sustain logic
         if (!sustaining) {
             activeKeys.erase(activeKey);
             if (wasPressed) {

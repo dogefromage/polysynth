@@ -7,9 +7,10 @@
 #include "memory.h"
 #include "utils.h"
 
+#define FREQ_C0 16.35160
+
 static float idealFrequencyToSemis(float freq) {
-    float C0 = 16.35160;
-    return 12.0 / M_LN2 * logf(freq / C0);
+    return 12.0 / M_LN2 * logf(freq / FREQ_C0);
 }
 
 volatile static unsigned long microsTuningStart, microsTuningEnd, tuningCycles, totalTuningCycles;
@@ -38,7 +39,11 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
         voices[voiceIndex].out_pitch = semis;
     }
 
-    totalTuningCycles = (int)(0.302 * semis + 18.99);
+    float ideal_freq = FREQ_C0 * powf(2, semis / 12.0);
+    float measure_timespan = 1.0;  // seconds
+    totalTuningCycles = max((int)(ideal_freq * measure_timespan), 20);
+
+    // totalTuningCycles = (int)(0.5 * semis + 18.99);
 
     write();
 
@@ -59,10 +64,8 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
         delayMicroseconds(500);  // waiting for tuning to finish
         if (millis() > maxWaitTime) {
             detachInterrupt(digitalPinToInterrupt(PIN_AUDIO_LOOPBACK));
-#ifdef VERBOSE_TUNING
             debugprintf("[%d] (%s) Tuning timeout, semis=%.2f\n",
                         voiceIndex, isFilter ? "cutoff" : "pitch", semis);
-#endif
             return -1;
         }
     }
@@ -74,7 +77,7 @@ float Instrument::measureFrequency(int voiceIndex, float semis, bool isFilter) {
     return freq;
 }
 
-#define TUNING_SAMPLES 20
+#define TUNING_SAMPLES 10
 
 int Instrument::findTuningProfile(int voiceIndex, float semis_min, float semis_max, bool isFilter) {
     TuningCorrection* corr;
@@ -90,31 +93,37 @@ int Instrument::findTuningProfile(int voiceIndex, float semis_min, float semis_m
 
     float x[TUNING_SAMPLES] = {0};
     float y[TUNING_SAMPLES] = {0};
+    int successful_samples = 0;
 
     float step = (semis_max - semis_min) / (TUNING_SAMPLES - 1);
+
+    // debugprintf("\n\nvoice, type, test_semis, test_freq, actual_semis\n");
 
     for (int i = 0; i < TUNING_SAMPLES; i++) {
         float test_semis = semis_min + i * step;
         float test_freq = measureFrequency(voiceIndex, test_semis, isFilter);
         if (test_freq < 0.0) {
-            return 1;  // tuning timeout (maybe make it such that some can fail TODO)
+            continue;  // timeout
         }
         float ideal_semis = idealFrequencyToSemis(test_freq);
-
         x[i] = ideal_semis;
         y[i] = test_semis;
+        successful_samples++;
 
-        debugprintf("[%d] (%s) %-10.3f%-10.3f%-10.3f\n",
+        debugprintf("%d, %s, %e, %e, %e\n",
                     voiceIndex, isFilter ? "cutoff" : "pitch", test_semis, test_freq, ideal_semis);
+    }
+
+    if (successful_samples < 5) {
+        debugprintf("[%d] (%s) too little samples!\n", voiceIndex, isFilter ? "cutoff" : "pitch");
+        return 1;
     }
 
     // solve LSQ
     fit_parabola(x, y, TUNING_SAMPLES, corr->parabolic);
 
-#ifdef VERBOSE_TUNING
-    debugprintf("%-6d%-7s a+bx+cx^2: %-10.3f%-10.3f%-10.3f\n",
-                voiceIndex, isFilter ? "cutoff" : "pitch", corr->parabolic[0], corr->parabolic[1], corr->parabolic[2]);
-#endif
+    // debugprintf("%-6d%-7s a+bx+cx^2: %-14e%-14e%-14e\n",
+    //             voiceIndex, isFilter ? "cutoff" : "pitch", corr->parabolic[0], corr->parabolic[1], corr->parabolic[2]);
 
     return 0;
 }
@@ -142,9 +151,7 @@ void Instrument::tune() {
 
     mainVolume = 0;
 
-#ifdef VERBOSE_TUNING
     debugprintf("Tuning:\n");
-#endif
 
     leds.setAllNumbers(LedModes::LED_MODE_OFF);
     leds.write();
@@ -167,7 +174,7 @@ void Instrument::tune() {
         voice.out_resonance = 0;
         voice.out_sub = 0;
         voice.out_amp = 1;
-        int errored = findTuningProfile(i, 30, 110, false);  // dac write is called later on
+        int errored = findTuningProfile(i, 15, 105, false);  // dac write is called later on
 
         leds.setSingle(
             (PanelLeds)(PanelLeds::LED_PATCH_01 + 2 * i),
@@ -176,9 +183,9 @@ void Instrument::tune() {
 
         // FILTER RESONANCE TRACKING
         mixer = 0;
-        voice.out_resonance = 0.6;  // TODO test this
+        voice.out_resonance = 0.6;
         voice.out_amp = 1;
-        errored = findTuningProfile(i, 30, 60, true);  // dac write is called later on
+        errored = findTuningProfile(i, 20, 65, true);  // dac write is called later on
 
         leds.setSingle(
             (PanelLeds)(PanelLeds::LED_PATCH_01 + 2 * i + 1),

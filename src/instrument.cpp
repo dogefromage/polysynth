@@ -192,36 +192,44 @@ void Instrument::update(float dt) {
 
     int chorus1 = patch.switches[SW_CHORUS_I] & 1;
     int chorus2 = patch.switches[SW_CHORUS_II] & 1;
-    chorusType = (chorus2 << 1) | chorus1;
 
     leds.setSingle(LED_SQUARE, square ? LED_MODE_ON : LED_MODE_OFF);
     leds.setSingle(LED_SAW, saw ? LED_MODE_ON : LED_MODE_OFF);
     leds.setSingle(LED_CHORUS_I, chorus1 ? LED_MODE_ON : LED_MODE_OFF);
     leds.setSingle(LED_CHORUS_II, chorus2 ? LED_MODE_ON : LED_MODE_OFF);
 
+    float chorusVolumeFactor = 1;
+    // chorus
+    chorusType = (chorus2 << 1) | chorus1;
     switch (chorusType) {
-        case 0:
-        case 1:  // TODO customize chorus per mode
-        case 2:
-        case 3:
-            chorusLfoLeft.frequency = 0.3;
-            chorusLfoRight.frequency = 0.3;
-            // 90° offset
-            chorusLfoRight.x = chorusLfoLeft.x + 0.5 * M_PI;
+        case 0b00:
+            chorusMix = 0;
+            break;
+        case 0b01:
+            chorusMix = 0.8;
+            chorusVolumeFactor = 0.8;
+            chorusLfoLeft.frequency = 0.2;
+            chorusLfoRight.frequency = 0.2;
+            break;
+        case 0b10:
+            chorusMix = 0.6;
+            chorusVolumeFactor = 0.8;
+            chorusLfoLeft.frequency = 0.4;
+            chorusLfoRight.frequency = 0.4;
+            break;
+        case 0b11:
+            chorusMix = 0.1;
+            chorusVolumeFactor = 0.8;
+            chorusLfoLeft.frequency = 2.7;
+            chorusLfoRight.frequency = 2.7;
             break;
     }
+    chorusLfoRight.x = chorusLfoLeft.x + 0.5 * M_PI;
+
     chorusLfoLeft.update(dt, false);
     chorusLfoRight.update(dt, false);
 
-    float volumeFactor = 1;
-    if (chorus1) {
-        volumeFactor *= 0.95;
-    }
-    if (chorus2) {
-        volumeFactor *= 0.9;
-    }
-
-    mainVolume = volumeFactor * (settings[INS_VOLUME] / 1024.0f);
+    mainVolume = chorusVolumeFactor * (settings[INS_VOLUME] / 1024.0f);
     // debugprintf("%.2f\n", mainVolume);
     // delay(100);
 }
@@ -428,7 +436,7 @@ int toClampedChar(float x) {
 }
 
 char chorus_level(float lfo) {
-    float normalized = 0.25 + 0.75 * (0.5 + 0.5 * lfo);
+    float normalized = 0.5 + 0.5 * lfo;
     return toClampedChar(255 * normalized);
 }
 
@@ -439,14 +447,14 @@ void Instrument::write() {
 
     digitalWrite(PIN_EN_SAW, !(mixer & MIXER_SAW));
     digitalWrite(PIN_EN_SQR, !(mixer & MIXER_SQR));
-    digitalWrite(PIN_CHORUS_1, !(chorusType & 1));
-    digitalWrite(PIN_CHORUS_2, !(chorusType & 2));
+    digitalWrite(PIN_CHORUS_1, !chorusType);
+    digitalWrite(PIN_CHORUS_2, !chorusType);
 
     // MCP4802 for chorus
     // int levelA = toClampedChar(255 * chorusLfoLeft.level);
     // int levelB = toClampedChar(255 * chorusLfoRight.level);
-    int levelA = chorus_level(chorusLfoLeft.level);
-    int levelB = chorus_level(chorusLfoRight.level);
+    int levelA = chorus_level(chorusMix * chorusLfoLeft.level);
+    int levelB = chorus_level(chorusMix * chorusLfoRight.level);
 
     enterCritical();
     spiWrapper.beginTransaction(mcp4802Settings);

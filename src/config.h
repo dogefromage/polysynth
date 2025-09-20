@@ -46,8 +46,6 @@
 // #define PIN_MIDI_TX 35
 // #define PIN_MIDI_RX 34
 
-#define VERBOSE_TUNING
-
 #define ACTIVE_VOICES 8
 
 #define NUM_KEYS 61
