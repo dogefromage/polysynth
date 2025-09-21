@@ -78,9 +78,10 @@ void swap(int* a, int* b) {
 void Player::updateArpSequence() {
     // reconstruct arp sequence from currently pressed keys
     noteBufferSize = 0;
-    for (const auto& activeKey : keybed.getActiveKeys()) {
-        if (activeKey.second.state == KeyStates::PRESSED) {
-            int note = keyToNote(activeKey.first);
+    for (int i = 0; i < NUM_KEYS; i++) {
+        bool isPressed = keybed.getKeyStates()[i] != KeyStates::OPEN;
+        if (isPressed) {
+            int note = keyToNote(i);
             noteBuffer[noteBufferSize++] = note;
             if (noteBufferSize >= NOTE_BUFFER_MAX_SIZE) {
                 break;  // too many notes
@@ -368,12 +369,14 @@ void Player::init() {
         int note = Player::getInstance().keyToNote(key);
         Player::getInstance().handleNoteOff(note, 0, false);
     });
+
+    keybed.init();
 }
 
 void Player::update(float dt) {
     midiRead(midiChannel);
 
-    keybed.read();
+    keybed.update();
 
     float tickDuration = getClockStepSeconds(settings[PLS_RATE]);
     clockTimer.setIntervalMicroseconds((uint32_t)(1000000 * tickDuration));

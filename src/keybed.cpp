@@ -2,8 +2,6 @@
 
 #include "config.h"
 
-constexpr int NUM_KEYS = 61;
-
 /**
  * [Bank]: first or second keyboard matrix
  * [Row]: Shift register output address from 0 to 7 in specified bank
@@ -36,60 +34,71 @@ static int calculateVelocity(uint32_t millis) {
     return std::min(127, 1000 / (int)millis);
 }
 
-void Keybed::updateKey(int key, KeyStates currentState, bool sustaining) {
-    auto activeKey = activeKeys.find(key);
+void Keybed::updateKey(const int key, const MatrixLevel currentLevel) {
+    const MatrixLevel& lastLevel = lastMatrixLevels[key];
 
-    if (currentState == KeyStates::OPEN && activeKey != activeKeys.end()) {
-        bool wasPressed = activeKey->second.state == KeyStates::PRESSED;
+    if (currentLevel == MatrixLevel::OPEN) {
+        travelStarts[key] = 0;  // invalidate
+    }
 
-        // TODO fix this sustain logic
-        if (!sustaining) {
-            activeKeys.erase(activeKey);
-            if (wasPressed) {
-                if (handleKeyUp) {
-                    handleKeyUp(key);
-                }
+    if (currentLevel == MatrixLevel::FIRST && lastLevel == MatrixLevel::OPEN) {
+        travelStarts[key] = millis();
+    }
+
+    if (currentLevel == MatrixLevel::BOTH && lastLevel != currentLevel) {
+        // key is pressed
+        int velocity = 127;
+        if (travelStarts[key] > 0) {
+            // is valid
+            uint32_t deltaMillis = millis() - travelStarts[key];
+            velocity = calculateVelocity(deltaMillis);
+        }
+
+        if (isSustaining) {
+            // retrigger key
+            if (handleKeyUp) {
+                handleKeyUp(key);
+            }
+            uint32_t retriggerTime = 10;
+            scheduledKeyDowns.push_back({key, velocity, millis() + retriggerTime});
+        } else {
+            // play now
+            scheduledKeyDowns.push_back({key, velocity, millis()});
+        }
+
+        keyStates[key] = KeyStates::PRESSED;
+    }
+
+    if (currentLevel == MatrixLevel::OPEN) {
+        if (isSustaining && keyStates[key] == KeyStates::PRESSED) {
+            keyStates[key] = KeyStates::SUSTAINED;
+        }
+        if (!isSustaining && keyStates[key] != KeyStates::OPEN) {
+            keyStates[key] = KeyStates::OPEN;
+            if (handleKeyUp) {
+                handleKeyUp(key);
             }
         }
     }
 
-    if (currentState == KeyStates::TRAVELLING && activeKey == activeKeys.end()) {
-        // not already present
-        activeKeys[key] = {
-            state : KeyStates::TRAVELLING,
-            travellingMillis : millis(),
-        };
+    lastMatrixLevels[key] = currentLevel;
+}
+
+void Keybed::init() {
+    for (int i = 0; i < NUM_KEYS; i++) {
+        lastMatrixLevels[i] = MatrixLevel::OPEN;
     }
-
-    if (currentState == KeyStates::PRESSED) {
-        if (activeKey != activeKeys.end() && activeKey->second.state == KeyStates::TRAVELLING) {
-            // transition from travelling to fully pressed
-            activeKey->second.state = KeyStates::PRESSED;
-
-            uint32_t deltaMillis = millis() - activeKey->second.travellingMillis;
-            int velocity = calculateVelocity(deltaMillis);
-            if (handleKeyDown) {
-                handleKeyDown(key, velocity);
-            }
-        } else if (activeKey == activeKeys.end()) {
-            // key did not enter travelling phase - directly start with full velocity
-            activeKeys[key] = {
-                state : KeyStates::PRESSED,
-                travellingMillis : 0,
-            };
-
-            if (handleKeyDown) {
-                handleKeyDown(key, 127);
-            }
-        }
+    for (int i = 0; i < NUM_KEYS; i++) {
+        keyStates[i] = KeyStates::OPEN;
     }
 }
 
-void Keybed::read() {
-    KeyStates states[NUM_KEYS];
+void Keybed::update() {
+    isSustaining = !digitalRead(PIN_FTSW);
 
+    MatrixLevel levels[NUM_KEYS];
     for (int i = 0; i < NUM_KEYS; i++) {
-        states[i] = KeyStates::OPEN;
+        levels[i] = MatrixLevel::OPEN;
     }
 
     for (int row = 0; row < 8; row++) {
@@ -123,20 +132,32 @@ void Keybed::read() {
                 if (digitalRead(keyMatrixInputs[bank])) {
                     if (button >= 100) {
                         // is second trigger
-                        states[button - 100] = KeyStates::PRESSED;
-                    } else if (states[button] != KeyStates::PRESSED) {
-                        // is first trigger
-                        states[button] = KeyStates::TRAVELLING;
+                        levels[button - 100] = MatrixLevel::BOTH;
+                    } else if (levels[button] != MatrixLevel::BOTH) {
+                        // is first trigger (ensure not to clear previous set level 2)
+                        levels[button] = MatrixLevel::FIRST;
                     }
                 }
             }
         }
     }
 
-    bool sustaining = !digitalRead(PIN_FTSW);
-
     for (int i = 0; i < NUM_KEYS; i++) {
-        updateKey(i, states[i], sustaining);
+        updateKey(i, levels[i]);
+    }
+
+    // triggering
+    uint32_t currentMillis = millis();
+    for (auto iter = scheduledKeyDowns.begin(); iter != scheduledKeyDowns.end();) {
+        if (iter->timeMillis <= currentMillis) {
+            // trigger
+            if (handleKeyDown) {
+                handleKeyDown(iter->key, iter->velocity);
+            }
+            iter = scheduledKeyDowns.erase(iter);
+        } else {
+            iter++;
+        }
     }
 }
 
@@ -188,6 +209,6 @@ void Keybed::setHandleKeyUp(void (*callback)(int key)) {
     handleKeyUp = callback;
 }
 
-const std::map<int, ActiveKey>& Keybed::getActiveKeys() const {
-    return activeKeys;
+const KeyStates* Keybed::getKeyStates() const {
+    return keyStates;
 }
