@@ -48,8 +48,6 @@
 
 #define ACTIVE_VOICES 8
 
-#define NUM_KEYS 61
-
 extern SPIWrapperSettings ledSPISettings;
 extern SPIWrapperSettings dacSPISettings;
 extern SPIWrapperSettings mcp4802Settings;

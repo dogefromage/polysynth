@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
-#include <map>
 
 #include "instrument.h"
+#include "keybed.h"
 #include "led.h"
 
 #define NOTE_BUFFER_MAX_SIZE 256
@@ -27,17 +27,6 @@ enum PlayerSettings {
     PLS__COUNT__,
 };
 
-enum class KeyStates {
-    OPEN,
-    TRAVELLING,
-    PRESSED,
-};
-
-struct ActiveKey {
-    KeyStates state;
-    uint32_t travellingMillis;
-};
-
 enum class SongMode {
     Playing,
     Paused
@@ -48,6 +37,8 @@ class Player {
 
     Instrument& instr;
     PanelLedController& leds;
+
+    Keybed keybed;
 
     PlayerState state = PLSTATE_NORMAL;
     int16_t settings[PLS__COUNT__] = {};
@@ -69,15 +60,9 @@ class Player {
 
     SongMode songMode = SongMode::Playing;
 
-    // keys which are travelling, pressed, (maybe add sustained here as well)
-    std::map<int, ActiveKey> activeKeys;
-
     void setState(PlayerState nextState);
     void pushSequencerNote(int note);
     void setTransposition(int note);
-    int keyToNote(int key);
-    void updateKey(int key, KeyStates currentState, bool sustaining);
-    void readKeyBoard();
     void step();
 
     void clockTick(bool isMidi);
@@ -107,6 +92,7 @@ class Player {
     void resetClockProgress();
     void setSongMode(SongMode mode);
     void updateArpSequence();
+    int keyToNote(int key);
 
     Player(const Player&) = delete;
 };
